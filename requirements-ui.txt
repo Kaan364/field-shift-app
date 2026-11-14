@@ -1,0 +1,9 @@
+# Arayüz bağımlılıkları — backend için requirements.txt yeterlidir.
+-r requirements.txt
+
+streamlit>=1.40,<2.0
+pandas>=2.2,<4.0
+
+# Harita (OpenStreetMap, API anahtarı gerekmez)
+folium>=0.17,<1.0
+streamlit-folium>=0.20,<1.0
