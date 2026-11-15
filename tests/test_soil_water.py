@@ -55,7 +55,7 @@ def test_soil_report_has_all_indicators(client):
     ]
     for indicator in soil["indicators"]:
         assert indicator["label"]
-        assert indicator["status"] in {"iyi", "orta", "zayıf", "bilinmiyor"}
+        assert indicator["status"] in {"good", "fair", "poor", "unknown"}
         assert indicator["advice"]
 
 
@@ -73,7 +73,7 @@ def test_soil_report_is_honest_about_unknowns(client):
     assert soil["data_gaps"]
     missing = [item for item in soil["indicators"] if item["score"] is None]
     assert missing
-    assert any("N-P-K" in gap or "analiz" in gap.lower() for gap in soil["data_gaps"])
+    assert any("N-P-K" in gap or "soil test" in gap.lower() for gap in soil["data_gaps"])
 
 
 def test_good_soil_scores_better_than_poor_soil(client):
@@ -113,7 +113,7 @@ def test_water_numbers_are_consistent(client):
     assert water["tips"]
     assert len(water["months"]) == 12
     for month in water["months"]:
-        assert month["status"] in {"kurak", "kuru", "yeterli", "bilinmiyor"}
+        assert month["status"] in {"dry", "low", "enough", "unknown"}
 
 
 def test_water_deficit_scales_with_field_size(client):
@@ -131,7 +131,7 @@ def test_rainfed_field_gets_water_saving_tips(client):
     assert rainfed["tips"]
     assert any(
         word in " ".join(rainfed["tips"]).lower()
-        for word in ("yağmur", "sulama", "malç", "az su", "damla")
+        for word in ("rain", "irrigation", "mulch", "less water", "drip")
     )
 
 

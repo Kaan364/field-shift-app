@@ -576,7 +576,11 @@
     $("noteText").textContent = text;
     const ai = data.ai || {};
     const llm = ai.kind === "llm" && !ai.fallback_used;
-    $("noteSource").textContent = llm ? "AI explanation" : "Rule engine";
+    if (llm && ai.blended) {
+      $("noteSource").textContent = "AI + rule engine";
+    } else {
+      $("noteSource").textContent = llm ? "AI explanation" : "Rule engine";
+    }
     $("noteSource").className = `pill${llm ? "" : " warn"}`;
   }
 
@@ -983,7 +987,7 @@
       ["Soil moisture (NASA)", num(soil.root_zone_moisture_mean, 2)],
       ["Soil temperature", `${num(soil.mean_soil_temp_c, 1)} °C`],
       ["Trend period", outlook.available ? `${outlook.start_year}–${outlook.end_year}` : "none"],
-      ["Explanation", data.ai?.kind === "llm" && !data.ai?.fallback_used ? "language model" : "rule engine"],
+      ["Explanation", data.ai?.blended ? "AI + rule engine" : data.ai?.kind === "llm" && !data.ai?.fallback_used ? "language model" : "rule engine"],
       ["Plan no", String(data.plan_id || "").slice(0, 10)],
     ];
     $("techDetails").innerHTML = `

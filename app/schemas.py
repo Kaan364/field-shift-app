@@ -283,6 +283,8 @@ class AIMetadata(BaseModel):
     kind: Literal["llm", "deterministic"] = "deterministic"
     used: bool = False
     fallback_used: bool = False
+    blended: bool = False
+    blend_weight: float | None = None
     latency_ms: int | None = None
     error: str | None = None
     notes: str | None = None

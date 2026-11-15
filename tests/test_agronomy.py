@@ -36,8 +36,8 @@ def test_climate_summary_matches_known_values():
     assert 0 < climate.aridity_index < 1
     assert climate.climate_class == "semi_arid"
     assert climate.growing_season_days == 244
-    assert "Ocak" in climate.frost_months
-    assert "Temmuz" in climate.heat_stress_months
+    assert "January" in climate.frost_months
+    assert "July" in climate.heat_stress_months
     assert environment.nasa_elevation_m == 1128.1
     assert len(environment.monthly) == 12
     assert notes
@@ -48,7 +48,7 @@ def test_soil_summary_is_bounded_and_flags_gaps():
     soil = environment.soil
     assert soil.soil_condition_score is not None
     assert 0 <= soil.soil_condition_score <= 100
-    assert soil.soil_condition_label in {"iyi", "orta", "zayıf", "çok zayıf"}
+    assert soil.soil_condition_label in {"good", "fair", "poor", "very poor"}
     assert soil.soil_ph == 7.4
     assert soil.root_zone_moisture_mean == 0.551
     assert any("N-P-K" in gap for gap in soil.data_gaps)
@@ -72,7 +72,7 @@ def test_season_metrics_use_crop_calendar():
     season = season_metrics(environment, wheat, preferred_month=10)
     assert season.start_month == 10
     assert season.months == (10, 11, 12, 1, 2, 3, 4, 5)
-    assert season.window_label == "Ekim–Mayıs"
+    assert season.window_label == "October–May"
     assert season.mean_temp_c is not None and season.mean_temp_c < 8
     assert season.total_precip_mm is not None and 320 < season.total_precip_mm < 340
     assert len(season.frost_months) == 8
@@ -81,7 +81,7 @@ def test_season_metrics_use_crop_calendar():
 def test_monthly_values_are_complete():
     environment, _ = _environment()
     january = environment.monthly[0]
-    assert january.month == "Ocak"
+    assert january.month == "January"
     assert january.mean_temp_c == -2.08
     assert january.frost_risk is True
     assert january.precip_month_mm == 49.6

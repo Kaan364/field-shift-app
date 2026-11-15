@@ -132,7 +132,11 @@ def test_advice_passes_free_text_to_ai(make_client):
     data = response.json()
     assert data["ai"]["kind"] == "llm"
     assert data["ai"]["used"] is True
+    assert data["ai"]["blended"] is True
     assert data["advice"]["headline"].startswith("Plant winter wheat")
+    # Both the AI explanation and the deterministic check survive the merge.
+    assert "Rule-engine check:" in data["advice"]["why"]
+    assert any("blended" in warning.lower() for warning in data["warnings"])
 
 
 class FailingProvider(AIProvider):

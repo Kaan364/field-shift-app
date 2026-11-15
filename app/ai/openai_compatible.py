@@ -60,7 +60,7 @@ class OpenAICompatibleProvider(AIProvider):
 
     async def _complete(self, system: str, user: str) -> str:
         if not self.api_key and self.name not in {"ollama"}:
-            raise AIProviderError(f"{self.name} için API anahtarı tanımlı değil.")
+            raise AIProviderError(f"No API key is configured for {self.name}.")
 
         base_payload = {
             "model": self.model,
@@ -95,14 +95,14 @@ class OpenAICompatibleProvider(AIProvider):
         if response.status_code >= 400:
             detail = response.text[:400].replace("\n", " ")
             raise AIProviderError(
-                f"{self.name} API hatası (HTTP {response.status_code}): {detail}"
+                f"{self.name} API error (HTTP {response.status_code}): {detail}"
             )
 
         try:
             data = response.json()
             content = data["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise AIProviderError(f"{self.name} yanıtı beklenen biçimde değil.") from exc
+            raise AIProviderError(f"The {self.name} response was not in the expected format.") from exc
 
         if isinstance(content, list):
             content = "".join(

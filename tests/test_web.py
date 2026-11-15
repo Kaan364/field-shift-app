@@ -9,7 +9,7 @@ def test_root_serves_html_to_browsers(client):
     response = client.get("/", headers={"Accept": "text/html,application/xhtml+xml"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Tarla Dostu" in response.text
+    assert "FieldWise" in response.text
     assert "/app/styles.css" in response.text
     assert "/app/app.js" in response.text
 
@@ -24,7 +24,7 @@ def test_root_keeps_json_for_api_clients(client):
 def test_farmer_app_is_served_under_app(client):
     response = client.get("/app/")
     assert response.status_code == 200
-    assert "Tarla Dostu" in response.text
+    assert "FieldWise" in response.text
     assert "<html" in response.text.lower()
 
 
@@ -59,7 +59,7 @@ def test_manifest_is_installable(client):
     assert manifest["start_url"] == "/app/"
     assert manifest["scope"] == "/app/"
     assert manifest["display"] == "standalone"
-    assert manifest["lang"] == "tr"
+    assert manifest["lang"] == "en"
     sizes = {icon["sizes"] for icon in manifest["icons"]}
     assert {"192x192", "512x512"} <= sizes
     assert any(icon.get("purpose") == "maskable" for icon in manifest["icons"])
@@ -94,8 +94,8 @@ def test_html_has_required_wizard_controls(client):
 
 def test_html_states_the_decision_support_limit(client):
     html = client.get("/app/").text.lower()
-    assert "karar destek" in html
-    assert "garanti" in html
+    assert "decision support" in html
+    assert "guarantee" in html
 
 
 def test_app_js_references_real_endpoints(client):

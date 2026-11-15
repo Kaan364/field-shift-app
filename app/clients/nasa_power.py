@@ -146,7 +146,7 @@ def parse_nasa_payload(
         coordinates = payload["geometry"]["coordinates"]
         parameters_raw = payload["properties"]["parameter"]
     except (KeyError, TypeError) as exc:  # pragma: no cover - defensive
-        raise NASAAPIError("NASA POWER yanıtı beklenen biçimde değil.") from exc
+        raise NASAAPIError("The NASA POWER response was not in the expected format.") from exc
 
     header = payload.get("header", {}) or {}
     fill_value = _to_float(header.get("fill_value"))
@@ -390,7 +390,7 @@ class NASAPowerClient:
         result = aggregate_monthly_to_annual(monthly)
         if not result.parameters:
             raise NASAAPIError(
-                "NASA POWER aylık verisi yıllık eğilim için yeterli değil."
+                "NASA POWER monthly data is not sufficient for an annual trend."
             )
         self.cache.set(key, result, ttl_seconds=self.daily_cache_ttl_seconds)
         return result
@@ -415,17 +415,17 @@ class NASAPowerClient:
                 response = await self._client.get(url, params=query)
                 if response.status_code in {429, 500, 502, 503, 504}:
                     raise _TransientNASAError(
-                        f"NASA POWER geçici hata döndürdü (HTTP {response.status_code})."
+                        f"NASA POWER returned a transient error (HTTP {response.status_code})."
                     )
                 if response.status_code >= 400:
                     detail = response.text[:300].replace("\n", " ")
                     raise NASAAPIError(
-                        f"NASA POWER isteği başarısız (HTTP {response.status_code}): {detail}"
+                        f"NASA POWER request failed (HTTP {response.status_code}): {detail}"
                     )
                 try:
                     payload = response.json()
                 except ValueError as exc:
-                    raise NASAAPIError("NASA POWER geçerli JSON döndürmedi.") from exc
+                    raise NASAAPIError("NASA POWER did not return valid JSON.") from exc
                 return parse_nasa_payload(payload)
             except (_TransientNASAError, httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = exc
@@ -433,7 +433,7 @@ class NASAPowerClient:
                     break
                 delay = self.retry_backoff_seconds * (2**attempt)
                 logger.warning(
-                    "NASA POWER isteği yeniden denenecek (%s/%s): %s",
+                    "NASA POWER request will be retried (%s/%s): %s",
                     attempt + 1,
                     self.max_retries,
                     exc,
@@ -442,6 +442,6 @@ class NASAPowerClient:
                     await asyncio.sleep(delay)
 
         raise NASAAPIError(
-            "NASA POWER servisine ulaşılamadı. İnternet bağlantısını kontrol edip "
-            "birkaç dakika sonra tekrar deneyin."
+            "Could not reach the NASA POWER service. Check your internet connection and "
+            "try again in a few minutes."
         ) from last_error

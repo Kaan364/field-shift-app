@@ -67,7 +67,7 @@ class NominatimClient:
                 found=False,
                 latitude=latitude,
                 longitude=longitude,
-                error=f"Adres servisine ulaşılamadı: {type(exc).__name__}",
+                error=f"Could not reach the address service: {type(exc).__name__}",
             )
 
         if response.status_code >= 400:
@@ -75,7 +75,7 @@ class NominatimClient:
                 found=False,
                 latitude=latitude,
                 longitude=longitude,
-                error=f"Adres servisi HTTP {response.status_code} döndürdü.",
+                error=f"The address service returned HTTP {response.status_code}.",
             )
 
         try:
@@ -85,7 +85,7 @@ class NominatimClient:
                 found=False,
                 latitude=latitude,
                 longitude=longitude,
-                error="Adres servisi geçersiz JSON döndürdü.",
+                error="The address service returned invalid JSON.",
             )
 
         address = data.get("address") or {}

@@ -283,15 +283,23 @@ AI_MODEL=gemini-3.5-flash-lite
 
 # Kural motoru ağırlığı: 0 = sadece kurallar, 1 = sadece AI
 AI_WEIGHT=0.35
+# AI anlatımını kural motorunun anlatımı, riskleri ve aksiyonlarıyla harmanla
+AI_BLEND_WITH_HEURISTIC=true
 AI_FALLBACK_TO_HEURISTIC=true
 ```
+
+`AI_BLEND_WITH_HEURISTIC=true` iken AI'nın yazdığı özet, gerekçe, risk ve aksiyon
+listeleri deterministik kural motorunun ürettikleriyle birleştirilir; biri diğerinin
+yerine geçmez. Puanlama formülü değişmez: sıralama yine yukarıdaki `final_score`
+ağırlığına göre yapılır. `AIMetadata.blended` ve `AIMetadata.blend_weight` alanları
+harmanlamanın uygulanıp uygulanmadığını gösterir.
 
 Coğrafi kodlama ve konum sayfası:
 
 ```env
 GEOCODING_ENABLED=true
 GEOCODING_BASE_URL=https://nominatim.openstreetmap.org
-GEOCODING_LANGUAGE=tr
+GEOCODING_LANGUAGE=en
 GEOCODING_CACHE_TTL_SECONDS=86400
 # /geo sayfasının döneceği varsayılan adres (göreli yol olabilir)
 UI_BASE_URL=/app/

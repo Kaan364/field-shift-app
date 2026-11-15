@@ -76,7 +76,7 @@ class GeminiProvider(AIProvider):
 
     async def _generate(self, system: str, user: str) -> str:
         if not self.api_key:
-            raise AIProviderError("Gemini için API anahtarı tanımlı değil.")
+            raise AIProviderError("No API key is configured for Gemini.")
 
         payload = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -90,14 +90,14 @@ class GeminiProvider(AIProvider):
         )
         if response.status_code >= 400:
             detail = response.text[:400].replace("\n", " ")
-            raise AIProviderError(f"Gemini API hatası (HTTP {response.status_code}): {detail}")
+            raise AIProviderError(f"Gemini API error (HTTP {response.status_code}): {detail}")
 
         try:
             data = response.json()
             parts = data["candidates"][0]["content"]["parts"]
             return "".join(part.get("text", "") for part in parts if isinstance(part, dict))
         except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise AIProviderError("Gemini yanıtı beklenen biçimde değil.") from exc
+            raise AIProviderError("The Gemini response was not in the expected format.") from exc
 
     # ------------------------------------------------------------------
     async def analyze(self, context: AIContext) -> AIAnalysis:

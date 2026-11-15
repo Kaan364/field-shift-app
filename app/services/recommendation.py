@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.ai.base import AIAnalysis, AICropAssessment, build_ai_context
+from app.ai.blending import blend_analysis
 from app.ai.heuristic import HeuristicProvider
 from app.clients.nasa_power import NASAAPIError, NASAPowerClient
 from app.config import Settings
@@ -133,6 +134,20 @@ class RecommendationService:
         ai_result, ai_meta = await self._run_ai(context, warnings)
 
         heuristic_result = await self.heuristic.analyze(context)
+        if (
+            self.settings.ai_blend_with_heuristic
+            and ai_meta.kind == "llm"
+            and ai_meta.used
+            and not ai_meta.fallback_used
+        ):
+            ai_result = blend_analysis(ai_result, heuristic_result, self.settings.ai_weight)
+            ai_meta.blended = True
+            ai_meta.blend_weight = self.settings.ai_weight
+            ai_meta.notes = (
+                f"AI narrative and the deterministic rule-engine check were blended "
+                f"(AI weight {self.settings.ai_weight:.2f}); scores stay on the documented weighting."
+            )
+
         recommendations = self._merge(
             request, environment, evaluations, ai_result, heuristic_result, ai_meta
         )
@@ -143,6 +158,11 @@ class RecommendationService:
                 "AI-generated rationale and actions may be unverified; "
                 "have an agronomist review before a field decision."
             )
+            if ai_meta.blended:
+                warnings.append(
+                    "The AI explanation was blended with the deterministic rule engine: "
+                    "narrative, risks and actions combine both views."
+                )
 
         summary = (ai_result.summary or heuristic_result.summary).strip()
         if not summary:
@@ -213,14 +233,20 @@ class RecommendationService:
             meta.fallback_used = True
             meta.error = str(exc)[:500]
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
-            meta.notes = (
+            notes = (
                 "LLM çağrısı başarısız oldu; deterministik motor devreye alındı."
                 if context.language == "tr"
                 else "LLM call failed; the deterministic engine was used."
             )
+            meta.notes = notes
             warnings.append(
                 "AI sağlayıcısına ulaşılamadı; sonuçlar deterministik agronomi motoruyla üretildi. "
                 "AI anahtarını, kotayı ve ağ bağlantısını kontrol edin."
+                if context.language == "tr"
+                else (
+                    "The AI provider could not be reached; results were produced by the "
+                    "deterministic agronomy engine. Check the AI key, quota and network."
+                )
             )
             return result, meta
 
@@ -372,7 +398,7 @@ class RecommendationService:
                     description="Daily temperature, rainfall and soil moisture for the last 30 days.",
                 )
             )
-        if ai_meta.kind == "llm":
+        if ai_meta.kind == "llm" and not ai_meta.fallback_used:
             sources.append(
                 DataSource(
                     name=f"AI provider: {ai_meta.provider}",
@@ -380,6 +406,29 @@ class RecommendationService:
                     description=(
                         f"Model: {ai_meta.model or 'not specified'}. AI output is unverified; "
                         "agronomist review is required."
+                    ),
+                )
+            )
+            if ai_meta.blended:
+                sources.append(
+                    DataSource(
+                        name="Deterministic agronomy engine (blended)",
+                        url=None,
+                        description=(
+                            "Explainable rule-based scoring blended with the AI narrative "
+                            f"(AI weight {ai_meta.blend_weight or 0.0:.2f}); ranking is "
+                            "produced by the documented weighted score."
+                        ),
+                    )
+                )
+        elif ai_meta.kind == "llm" and ai_meta.fallback_used:
+            sources.append(
+                DataSource(
+                    name="Deterministic agronomy engine",
+                    url=None,
+                    description=(
+                        "The AI provider did not respond; explainable rule-based scoring "
+                        "produced this result."
                     ),
                 )
             )

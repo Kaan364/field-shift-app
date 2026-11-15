@@ -133,7 +133,7 @@ async def test_openai_compatible_provider_roundtrip():
     result = await provider.analyze(make_context())
     await provider.aclose()
 
-    assert result.summary == "Test özeti."
+    assert result.summary == "Test summary."
     assert captured[0].headers["Authorization"] == "Bearer secret"
     body = json.loads(captured[0].content)
     assert body["model"] == "test-model"
@@ -255,7 +255,7 @@ def test_parse_advice_flags_unknown_crop():
         "confidence": "high",
     }
     plan = parse_advice(json.dumps(payload), allowed_crop_keys={"wheat"})
-    assert any("Doğrulanamayan bitki" in risk for risk in plan.risks)
+    assert any("Unverified crop" in risk for risk in plan.risks)
 
 
 async def test_gemini_provider_roundtrip_and_request_shape():
@@ -284,7 +284,7 @@ async def test_gemini_provider_roundtrip_and_request_shape():
     result = await provider.analyze(make_context())
     await provider.aclose()
 
-    assert result.summary == "Test özeti."
+    assert result.summary == "Test summary."
     request = captured[0]
     assert "models/gemini-test:generateContent" in str(request.url)
     assert request.headers["x-goog-api-key"] == "gem-key"
@@ -315,7 +315,7 @@ async def test_anthropic_provider_roundtrip():
     result = await provider.analyze(make_context())
     await provider.aclose()
 
-    assert result.summary == "Test özeti."
+    assert result.summary == "Test summary."
     request = captured[0]
     assert request.headers["x-api-key"] == "anthropic-key"
     body = json.loads(request.content)

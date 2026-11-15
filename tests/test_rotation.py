@@ -115,13 +115,13 @@ def test_low_water_goal_prefers_thriftier_rotation(client):
     assert thrifty_water <= profit_water * 1.15
 
 
-def test_score_labels_are_plain_turkish():
-    assert score_label(None) == "bilinmiyor"
-    assert score_label(95) == "çok iyi"
-    assert score_label(72) == "iyi"
-    assert score_label(60) == "orta"
-    assert score_label(45) == "zayıf"
-    assert score_label(10) == "çok zayıf"
+def test_score_labels_are_plain_english():
+    assert score_label(None) == "unknown"
+    assert score_label(95) == "very good"
+    assert score_label(72) == "good"
+    assert score_label(60) == "fair"
+    assert score_label(45) == "weak"
+    assert score_label(10) == "very weak"
 
 
 def test_rotation_endpoint_returns_a_rotation_without_advice(client):

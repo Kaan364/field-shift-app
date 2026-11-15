@@ -69,7 +69,7 @@ def test_excluded_crop_is_removed_with_warning():
     environment = _environment()
     evaluations, warnings = evaluate_candidates(_request(excluded_crops=["wheat"]), environment)
     assert all(evaluation.crop.key != "wheat" for evaluation in evaluations)
-    assert any("hariç" in warning.lower() for warning in warnings)
+    assert any("excluded" in warning.lower() for warning in warnings)
 
 
 def test_interest_boost_is_applied_and_bounded():
@@ -114,7 +114,7 @@ def test_max_growing_days_filters_candidates():
     evaluations, warnings = evaluate_candidates(_request(max_growing_days=110), environment)
     assert evaluations
     assert all(evaluation.crop.growing_days <= 110 for evaluation in evaluations)
-    assert any("sezon" in warning.lower() for warning in warnings)
+    assert any("season" in warning.lower() for warning in warnings)
 
 
 def test_data_completeness_affects_confidence():

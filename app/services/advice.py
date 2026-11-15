@@ -1,11 +1,12 @@
-"""Serbest metinli ("ne ekeyim?") çiftçi önerisi orkestrasyonu.
+"""Free-text ("what should I plant?") farmer advice orchestration.
 
-Akış:
-1. Çiftçinin yazdığı metin + konum + birkaç basit cevap alınır.
-2. NASA POWER iklim/toprak verisi çekilir.
-3. Deterministik kural motoru adayları puanlar (sıralamayı bu belirler).
-4. AI yalnızca *sade dilli açıklama* yazar; sıralamayı değiştiremez.
-5. AI yoksa/hata verirse deterministik şablon devreye girer.
+Flow:
+1. The farmer's free text, location and a few simple answers are collected.
+2. NASA POWER climate/soil data is fetched.
+3. The deterministic rule engine scores the candidates (it owns the ranking).
+4. The AI writes the plain-language explanation; when blending is enabled the
+   deterministic narrative, risks and action lists are merged with it.
+5. If the AI is unavailable, the deterministic template takes over.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.ai.base import AdviceContext, build_ai_context
+from app.ai.blending import blend_advice
 from app.ai.heuristic import HeuristicProvider
 from app.clients.nasa_power import NASAPowerClient
 from app.config import Settings
@@ -144,6 +146,11 @@ class AdviceService:
                 "The explanation was written by AI; the ranking comes from the rule engine. "
                 "Ask an expert before critical decisions such as pesticide or fertiliser doses."
             )
+            if ai_meta.blended:
+                warnings.append(
+                    "The AI explanation was blended with the deterministic rule engine: "
+                    "narrative, risks and action lists combine both views."
+                )
 
         summary = plan.headline or recommendations[0].rationale
 
@@ -215,9 +222,21 @@ class AdviceService:
                 meta.notes = f"{meta.notes} {provider.reason}"
             return plan, meta
 
+        # Always keep the deterministic plan: it is both the fallback and the
+        # second half of the blended answer.
+        heuristic_plan = await self.recommender.heuristic.advise(context)
+
         try:
             plan = await provider.advise(context)  # type: ignore[attr-defined]
             meta.used = True
+            if self.settings.ai_blend_with_heuristic:
+                plan = blend_advice(plan, heuristic_plan, self.settings.ai_weight)
+                meta.blended = True
+                meta.blend_weight = self.settings.ai_weight
+                meta.notes = (
+                    "AI explanation was blended with the deterministic advice plan "
+                    f"(AI weight {self.settings.ai_weight:.2f})."
+                )
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
             return plan, meta
         except Exception as exc:  # noqa: BLE001 - provider failures are isolated
@@ -229,14 +248,23 @@ class AdviceService:
                     code="ai_unavailable",
                 ) from exc
 
-            plan = await self.recommender.heuristic.advise(context)
+            plan = heuristic_plan
             meta.used = False
             meta.fallback_used = True
             meta.error = str(exc)[:500]
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
-            meta.notes = "The AI call failed; the deterministic explanation was used."
+            meta.notes = (
+                "AI çağrısı başarısız oldu; deterministik açıklama kullanıldı."
+                if context.language == "tr"
+                else "The AI call failed; the deterministic explanation was used."
+            )
             warnings.append(
-                "The AI service could not be reached; explanations come from the deterministic rule engine."
+                "AI servisine ulaşılamadı; açıklamalar deterministik kural motorundan geliyor."
+                if context.language == "tr"
+                else (
+                    "The AI service could not be reached; explanations come from the "
+                    "deterministic rule engine."
+                )
             )
             return plan, meta
 
@@ -285,6 +313,7 @@ class AdviceService:
     def _data_sources(self, request: AnalyzeRequest, ai_meta: AIMetadata) -> list[DataSource]:
         lat = f"{request.location.latitude:.4f}"
         lon = f"{request.location.longitude:.4f}"
+        turkish = request.language == Language.TR
         sources = [
             DataSource(
                 name="NASA POWER - Climatology",
@@ -294,22 +323,52 @@ class AdviceService:
                     f"GWETROOT,GWETTOP,TS,EVLAND,EVPTRNS&community=AG"
                     f"&latitude={lat}&longitude={lon}&format=JSON"
                 ),
-                description="25 yıllık (2001-2025) aylık iklim ve toprak nemi/sıcaklığı ortalamaları.",
+                description=(
+                    "25 yıllık (2001-2025) aylık iklim ve toprak nemi/sıcaklığı ortalamaları."
+                    if turkish
+                    else "25-year (2001-2025) monthly climate and soil-moisture/temperature averages."
+                ),
             ),
             DataSource(
-                name="Deterministik kural motoru",
+                name="Deterministic rule engine",
                 url=None,
-                description="Sıralama ve puanlar kural tabanlıdır; AI yalnızca açıklama yazar.",
+                description=(
+                    "Sıralama ve puanlar kural tabanlıdır; AI açıklamayı yazar."
+                    if turkish
+                    else "Ranking and scores come from explainable rules; the AI writes the explanation."
+                ),
             ),
         ]
-        if ai_meta.kind == "llm":
+        if ai_meta.kind == "llm" and not ai_meta.fallback_used:
             sources.append(
                 DataSource(
-                    name=f"AI sağlayıcı: {ai_meta.provider}",
+                    name=f"AI provider: {ai_meta.provider}",
                     url=None,
                     description=(
-                        f"Model: {ai_meta.model or 'belirtilmedi'}. Açıklama doğrulanmamıştır; "
-                        "uzman onayı gerekir."
+                        f"Model: {ai_meta.model or 'not specified'}. The explanation is unverified; "
+                        "expert review is required."
+                    ),
+                )
+            )
+            if ai_meta.blended:
+                sources.append(
+                    DataSource(
+                        name="Deterministic rule engine (blended)",
+                        url=None,
+                        description=(
+                            "The deterministic advice plan is merged with the AI explanation "
+                            f"(AI weight {ai_meta.blend_weight or 0.0:.2f}); ranking is unchanged."
+                        ),
+                    )
+                )
+        elif ai_meta.kind == "llm" and ai_meta.fallback_used:
+            sources.append(
+                DataSource(
+                    name="Deterministic rule engine",
+                    url=None,
+                    description=(
+                        "The AI provider did not respond; the deterministic advice plan "
+                        "produced this explanation."
                     ),
                 )
             )

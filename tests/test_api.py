@@ -21,7 +21,7 @@ def test_health(client):
 def test_geo_page_embeds_safe_redirect_target(client):
     ok = client.get("/geo", params={"next": "http://127.0.0.1:8501"})
     assert ok.status_code == 200
-    assert "Konumumu kullan" in ok.text
+    assert "Use my location" in ok.text
     assert "http://127.0.0.1:8501" in ok.text
 
     # javascript: gibi tehlikeli hedefler yok sayılır, varsayılan arayüz adresine düşer.
@@ -117,7 +117,7 @@ def test_analyze_ai_failure_falls_back(make_client):
     assert data["ai"]["fallback_used"] is True
     assert data["ai"]["used"] is False
     assert data["ai"]["error"] == "quota exceeded"
-    assert any("deterministik" in warning.lower() for warning in data["warnings"])
+    assert any("deterministic" in warning.lower() for warning in data["warnings"])
 
 
 def test_ai_weight_blend(make_client):
@@ -149,7 +149,43 @@ def test_ai_weight_blend(make_client):
     assert abs(wheat["scores"]["final_score"] - expected) <= 0.11
     assert data["ai"]["kind"] == "llm"
     assert data["ai"]["used"] is True
+    assert data["ai"]["blended"] is True
+    assert data["ai"]["blend_weight"] == 0.35
+    # The AI rationale and the deterministic check are both kept.
+    assert "Stub gerekçe." in wheat["rationale"]
+    assert "Rule-engine check:" in wheat["rationale"]
+    assert any("blended" in warning.lower() for warning in data["warnings"])
+    assert any("blended" in source["name"].lower() for source in data["data_sources"])
     assert data["recommendations"][0]["crop_key"] == "wheat"
+
+
+def test_blending_can_be_disabled(make_client, settings):
+    class StubAI(AIProvider):
+        name = "stub"
+        model = "stub-1"
+
+        async def analyze(self, context):
+            return AIAnalysis(
+                summary="Stub summary.",
+                crops=[
+                    AICropAssessment(
+                        crop_key="wheat",
+                        ai_score=100,
+                        rationale="Stub rationale.",
+                    )
+                ],
+                confidence="high",
+            )
+
+    settings.ai_blend_with_heuristic = False
+    client = make_client(ai=StubAI())
+    response = client.post("/api/v1/analyze", json=request_payload())
+    assert response.status_code == 200
+    data = response.json()
+    wheat = next(item for item in data["recommendations"] if item["crop_key"] == "wheat")
+    assert data["ai"]["blended"] is False
+    assert "Rule-engine check:" not in wheat["rationale"]
+    assert not any("blended" in source["name"].lower() for source in data["data_sources"])
 
 
 def test_environment_endpoint(client):

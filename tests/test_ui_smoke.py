@@ -28,7 +28,7 @@ def test_ui_renders_without_backend(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert not list(app.exception)
     assert len(app.tabs) == 5
-    assert any("ulaşılamıyor" in error.value for error in app.error)
+    assert any("Cannot reach the API" in error.value for error in app.error)
 
 
 def test_ui_shows_farmer_first_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -42,14 +42,14 @@ def test_ui_shows_farmer_first_flow(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert not list(app.exception)
     headings = [item.value for item in app.markdown]
-    assert any("1️⃣ Tarlan nerede?" in value for value in headings)
-    assert any("3️⃣ Kendi cümlelerinle anlat" in value for value in headings)
+    assert any("Where is your field?" in value for value in headings)
+    assert any("Tell us in your own words" in value for value in headings)
 
     labels = [button.label for button in app.button]
-    assert any("Bana ne ekeceğimi söyle" in label for label in labels)
-    assert any("Konumumu otomatik bul" in item.label for item in app.get("link_button"))
+    assert any("Tell me what to plant" in label for label in labels)
+    assert any("Find my location automatically" in item.label for item in app.get("link_button"))
     # Serbest metin alanı mevcut olmalı.
-    assert any(field.label == "Durumunu anlat" for field in app.text_area)
+    assert any(field.label == "Describe your situation" for field in app.text_area)
 
 
 def test_ui_detail_checkbox_hidden_until_result(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,7 +62,7 @@ def test_ui_detail_checkbox_hidden_until_result(monkeypatch: pytest.MonkeyPatch)
     app.run()
 
     labels = [checkbox.label for checkbox in app.checkbox]
-    assert not any("Detaylı bilgi göster" in label for label in labels)
+    assert not any("Show details" in label for label in labels)
 
 
 def test_ui_example_text_button_works(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -78,12 +78,12 @@ def test_ui_example_text_button_works(monkeypatch: pytest.MonkeyPatch) -> None:
     app = AppTest.from_file(str(UI_SCRIPT), default_timeout=120)
     app.run()
 
-    button = next(b for b in app.button if "Örnek yazıyı" in b.label)
+    button = next(b for b in app.button if "Fill in the example text" in b.label)
     button.click().run()
 
     assert not list(app.exception)
-    field = next(item for item in app.text_area if item.label == "Durumunu anlat")
-    assert "Ne ekeceğimi bilmiyorum" in field.value
+    field = next(item for item in app.text_area if item.label == "Describe your situation")
+    assert "I do not know what to plant" in field.value
 
 
 def test_ui_reset_location_button_works(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,10 +95,10 @@ def test_ui_reset_location_button_works(monkeypatch: pytest.MonkeyPatch) -> None
     app = AppTest.from_file(str(UI_SCRIPT), default_timeout=120)
     app.run()
 
-    next(b for b in app.button if "Merkeze dön" in b.label).click().run()
+    next(b for b in app.button if "Return to centre" in b.label).click().run()
     assert not list(app.exception)
 
-    next(b for b in app.button if "Bu bölgeyi kullan" in b.label).click().run()
+    next(b for b in app.button if "Use this region" in b.label).click().run()
     assert not list(app.exception)
 
 
@@ -117,7 +117,7 @@ def test_farmer_flow_builds_valid_advice_payload() -> None:
         "planting_month": 10,
         "free_text": "Ne ekeceğimi bilmiyorum, bana basitçe anlat.",
         "top_n": 3,
-        "language": "tr",
+        "language": "en",
     }
     request = AdviceRequest.model_validate(payload)
     assert request.location.region_name == "Edirne"
@@ -155,7 +155,7 @@ def test_ui_builds_valid_default_payload() -> None:
             "planting_month": 10,
         },
         "top_n": 5,
-        "language": "tr",
+        "language": "en",
     }
     request = AnalyzeRequest.model_validate(payload)
     assert request.location.latitude == 41.6771

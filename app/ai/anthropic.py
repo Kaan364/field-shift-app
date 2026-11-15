@@ -53,7 +53,7 @@ class AnthropicProvider(AIProvider):
 
     async def _complete(self, system: str, user: str) -> str:
         if not self.api_key:
-            raise AIProviderError("Anthropic için API anahtarı tanımlı değil.")
+            raise AIProviderError("No API key is configured for Anthropic.")
 
         payload = {
             "model": self.model,
@@ -65,7 +65,7 @@ class AnthropicProvider(AIProvider):
         response = await self._client.post(f"{self.base_url}/messages", json=payload)
         if response.status_code >= 400:
             detail = response.text[:400].replace("\n", " ")
-            raise AIProviderError(f"Anthropic API hatası (HTTP {response.status_code}): {detail}")
+            raise AIProviderError(f"Anthropic API error (HTTP {response.status_code}): {detail}")
 
         try:
             data = response.json()
@@ -75,7 +75,7 @@ class AnthropicProvider(AIProvider):
                 if isinstance(block, dict) and block.get("type") == "text"
             )
         except (ValueError, KeyError, TypeError) as exc:
-            raise AIProviderError("Anthropic yanıtı beklenen biçimde değil.") from exc
+            raise AIProviderError("The Anthropic response was not in the expected format.") from exc
 
     async def analyze(self, context: AIContext) -> AIAnalysis:
         system, user = build_messages(context)

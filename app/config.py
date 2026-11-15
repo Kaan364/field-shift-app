@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     geocoding_timeout_seconds: float = Field(8.0, gt=0)
     geocoding_cache_ttl_seconds: int = Field(86_400, ge=0)
     geocoding_user_agent: str = "ProjectAlphecca/0.1 (agricultural decision support)"
-    geocoding_language: str = "tr"
+    geocoding_language: str = "en"
 
     # --- AI ---------------------------------------------------------------
     ai_provider: str = "heuristic"
@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     ai_temperature: float = Field(0.2, ge=0, le=2)
     ai_max_output_tokens: int = Field(1600, ge=256, le=8192)
     ai_weight: float = Field(0.35, ge=0, le=1)
+    ai_blend_with_heuristic: bool = True
     ai_fallback_to_heuristic: bool = True
     ai_json_mode: bool = True
     max_ai_candidates: int = Field(8, ge=1, le=16)

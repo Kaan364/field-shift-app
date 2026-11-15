@@ -45,7 +45,7 @@ def build_ai_provider(settings: Settings) -> AIProvider:
 
     missing_key = provider not in NO_KEY_PROVIDERS and not settings.ai_api_key
     if missing_key:
-        message = f"{provider} için AI_API_KEY tanımlı değil; deterministik motor kullanılacak."
+        message = f"AI_API_KEY is not set for {provider}; the deterministic engine will be used."
         if not settings.ai_fallback_to_heuristic:
             raise AIProviderError(message)
         logger.warning(message)
@@ -66,7 +66,7 @@ def build_ai_provider(settings: Settings) -> AIProvider:
 
     if provider == "custom":
         if not settings.ai_base_url:
-            message = "custom sağlayıcı için AI_BASE_URL zorunludur; deterministik motor kullanılacak."
+            message = "AI_BASE_URL is required for the custom provider; the deterministic engine will be used."
             if not settings.ai_fallback_to_heuristic:
                 raise AIProviderError(message)
             logger.warning(message)
@@ -102,7 +102,7 @@ def build_ai_provider(settings: Settings) -> AIProvider:
             max_tokens=settings.ai_max_output_tokens,
         )
 
-    message = f"Bilinmeyen AI_PROVIDER '{provider}'; deterministik motor kullanılacak."
+    message = f"Unknown AI_PROVIDER '{provider}'; the deterministic engine will be used."
     if not settings.ai_fallback_to_heuristic:
         raise AIProviderError(message)
     logger.warning(message)

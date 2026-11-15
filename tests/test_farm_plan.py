@@ -53,7 +53,7 @@ def test_farm_plan_is_complete(client):
     assert data["language"] == "tr"
     assert data["summary"]
     assert data["disclaimer"]
-    assert "karar destek" in data["disclaimer"].lower()
+    assert "decision support" in data["disclaimer"].lower()
     assert data["data_sources"]
     assert data["ai"]["used"] is True
 
@@ -106,7 +106,7 @@ def test_farm_plan_degrades_gracefully_without_annual_data(settings):
     assert data["rotation"]["years"]
     assert data["soil_health"]["score"] is not None
     assert data["water"]["deficit_mm"] >= 0
-    assert any("eğilim" in warning.lower() or "yıllık" in warning.lower() for warning in data["warnings"])
+    assert any("trend" in warning.lower() for warning in data["warnings"])
 
 
 @pytest.mark.parametrize(

@@ -133,7 +133,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.92,
         gross_margin=0.55,
         yield_potential=0.65,
-        notes="Kışlık tahıl; kök çürüklüğü ve septoria takibi önemlidir.",
+        notes="Winter cereal; watch for root rot and septoria.",
     ),
     CropProfile(
         key="barley",
@@ -157,7 +157,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.78,
         gross_margin=0.5,
         yield_potential=0.6,
-        notes="Kurağa ve tuzluluğa buğdaydan daha dayanıklıdır.",
+        notes="More tolerant of drought and salinity than wheat.",
     ),
     CropProfile(
         key="maize",
@@ -181,7 +181,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.92,
         gross_margin=0.68,
         yield_potential=0.85,
-        notes="Yüksek verim potansiyeli; sulama ve azot olmadan riskli.",
+        notes="High yield potential; risky without irrigation and nitrogen.",
     ),
     CropProfile(
         key="sunflower",
@@ -205,7 +205,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.85,
         gross_margin=0.62,
         yield_potential=0.7,
-        notes="Çiçeklenme döneminde sulama verimi belirgin artırır.",
+        notes="Irrigation at flowering clearly increases yield.",
     ),
     CropProfile(
         key="chickpea",
@@ -229,7 +229,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.8,
         gross_margin=0.62,
         yield_potential=0.55,
-        notes="Baklagil; azot bağlar, ekim nöbetinde toprak sağlığına katkı sağlar.",
+        notes="Legume; fixes nitrogen and improves soil health in a rotation.",
     ),
     CropProfile(
         key="lentil",
@@ -253,7 +253,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.75,
         gross_margin=0.58,
         yield_potential=0.5,
-        notes="Kurak koşullara uygun, düşük girdili baklagil.",
+        notes="A low-input legume suited to dry conditions.",
     ),
     CropProfile(
         key="potato",
@@ -277,7 +277,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.88,
         gross_margin=0.66,
         yield_potential=0.8,
-        notes="Yumru kalitesi için düzenli sulama ve iyi drenaj gerekir.",
+        notes="Regular irrigation and good drainage are needed for tuber quality.",
     ),
     CropProfile(
         key="tomato",
@@ -301,7 +301,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.9,
         gross_margin=0.8,
         yield_potential=0.8,
-        notes="Yüksek gelir ama yüksek su, gübre ve işçilik ihtiyacı.",
+        notes="High income but high water, fertiliser and labour needs.",
     ),
     CropProfile(
         key="cotton",
@@ -325,7 +325,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.85,
         gross_margin=0.72,
         yield_potential=0.78,
-        notes="Sıcak ve uzun sezon ister; sulama olmadan ekonomik değildir.",
+        notes="Needs a warm, long season; not economic without irrigation.",
     ),
     CropProfile(
         key="soybean",
@@ -349,7 +349,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.82,
         gross_margin=0.62,
         yield_potential=0.7,
-        notes="Baklagil; rhizobium aşılaması ve düzenli nem ister.",
+        notes="Legume; needs rhizobium inoculation and steady moisture.",
     ),
     CropProfile(
         key="canola",
@@ -373,7 +373,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.76,
         gross_margin=0.6,
         yield_potential=0.64,
-        notes="Kışlık yağlık; ekim nöbetinde hastalık kırıcı rol oynar.",
+        notes="Winter oilseed; breaks disease cycles in a rotation.",
     ),
     CropProfile(
         key="sugar_beet",
@@ -397,7 +397,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.7,
         gross_margin=0.56,
         yield_potential=0.78,
-        notes="Kontratlı üretim ve şeker fabrikası lojistiği gerekir.",
+        notes="Requires contract production and sugar-factory logistics.",
     ),
     CropProfile(
         key="alfalfa",
@@ -421,7 +421,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.68,
         gross_margin=0.52,
         yield_potential=0.75,
-        notes="Çok yıllık yem bitkisi; toprak yapısını iyileştirir.",
+        notes="Perennial forage crop; improves soil structure.",
     ),
     CropProfile(
         key="olive",
@@ -445,7 +445,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.88,
         gross_margin=0.68,
         yield_potential=0.62,
-        notes="Çok yıllık; yatırım geri dönüşü uzun, don riskine hassas.",
+        notes="Perennial; slow return on investment and sensitive to frost.",
     ),
     CropProfile(
         key="grape",
@@ -469,7 +469,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.86,
         gross_margin=0.7,
         yield_potential=0.65,
-        notes="Çok yıllık; çeşit seçimi ve budama takvimi kritik.",
+        notes="Perennial; variety choice and pruning calendar are critical.",
     ),
     CropProfile(
         key="apple",
@@ -493,7 +493,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.84,
         gross_margin=0.68,
         yield_potential=0.7,
-        notes="Çok yıllık; soğuklama ihtiyacı ve don riski çeşide göre değişir.",
+        notes="Perennial; chilling requirement and frost risk vary by variety.",
     ),
     CropProfile(
         key="triticale",
@@ -517,7 +517,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.6,
         gross_margin=0.48,
         yield_potential=0.68,
-        notes="Buğday ve çavdar melezi; kışa ve kurağa dayanıklı, hayvan yemi olarak da kullanılır.",
+        notes="Wheat-rye hybrid; tolerant of winter and drought, also used as animal feed.",
     ),
     CropProfile(
         key="oats",
@@ -541,7 +541,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.58,
         gross_margin=0.45,
         yield_potential=0.6,
-        notes="Serin ve nemli koşulları sever; yeşil gübre ve yem karışımlarında da kullanılır.",
+        notes="Prefers cool, moist conditions; also used in green manure and forage mixes.",
     ),
     CropProfile(
         key="safflower",
@@ -565,7 +565,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.55,
         gross_margin=0.5,
         yield_potential=0.5,
-        notes="Kurağa çok dayanıklı yağ bitkisi; suyu az olan tarlalarda alternatif olabilir.",
+        notes="Very drought-tolerant oilseed; an option for fields with little water.",
     ),
     CropProfile(
         key="sainfoin",
@@ -589,7 +589,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.5,
         gross_margin=0.42,
         yield_potential=0.6,
-        notes="Çok yıllık baklagil yem bitkisi; kurağa dayanıklı, toprağı azotla zenginleştirir.",
+        notes="Perennial legume forage; drought-tolerant and enriches the soil with nitrogen.",
     ),
     CropProfile(
         key="vetch",
@@ -613,7 +613,7 @@ CROPS: tuple[CropProfile, ...] = (
         market_demand=0.35,
         gross_margin=0.35,
         yield_potential=0.45,
-        notes="Yeşil gübre ve yem için baklagil; toprağa azot bağlar, anızı yakmadan toprağa karıştırılır.",
+        notes="Legume for green manure and forage; fixes nitrogen and is incorporated without burning stubble.",
     ),
 )
 
