@@ -4,7 +4,8 @@ Documentation: https://power.larc.nasa.gov/docs/services/api/
 
 The client fetches:
 * monthly climatology (25-year baseline) for climate and soil-moisture proxies;
-* recent daily values (last N days) for a short-term context.
+* recent daily values (last N days) for a short-term context;
+* a monthly series aggregated into yearly values for climate-trend detection.
 
 NASA returns ``-999.0`` for missing values; those are normalised to ``None``.
 A small in-process TTL cache avoids hammering the public API.
@@ -13,6 +14,7 @@ A small in-process TTL cache avoids hammering the public API.
 from __future__ import annotations
 
 import asyncio
+import calendar
 import logging
 import time
 from dataclasses import dataclass, field
@@ -46,6 +48,14 @@ DAILY_PARAMETERS = (
     "RH2M",
     "GWETROOT",
     "GWETTOP",
+)
+
+ANNUAL_PARAMETERS = (
+    "T2M",
+    "T2M_MIN",
+    "T2M_MAX",
+    "PRECTOTCORR",
+    "GWETROOT",
 )
 
 
@@ -175,6 +185,69 @@ def parse_nasa_payload(
     )
 
 
+PRECIPITATION_PARAMETERS = frozenset({"PRECTOTCORR", "PRECTOT", "PRECSNO", "PRECSNOLAND"})
+
+
+def aggregate_monthly_to_annual(
+    result: NASAResult,
+    *,
+    require_months: int = 12,
+) -> NASAResult:
+    """Turn a monthly NASA POWER series (``YYYYMM`` keys) into yearly values.
+
+    NASA POWER has no temporal ``annual`` endpoint, so the long-term climate
+    outlook is built from the monthly endpoint:
+
+    * precipitation is a monthly average in mm/day, so each month is scaled by
+      its length and the twelve months are summed;
+    * temperature and soil moisture are averaged across the twelve months.
+
+    Only complete calendar years are kept. A partial current year would bias a
+    trend, so it is dropped rather than guessed.
+    """
+
+    annual: dict[str, dict[str, float | None]] = {}
+    for parameter, series in result.parameters.items():
+        months_by_year: dict[int, dict[int, float]] = {}
+        for key, value in series.items():
+            if value is None or len(key) != 6 or not key.isdigit():
+                continue
+            year, month = int(key[:4]), int(key[4:])
+            if not 1 <= month <= 12:
+                continue
+            months_by_year.setdefault(year, {})[month] = float(value)
+
+        yearly: dict[str, float | None] = {}
+        for year, months in sorted(months_by_year.items()):
+            if len(months) < require_months:
+                continue
+            if parameter in PRECIPITATION_PARAMETERS:
+                total = sum(
+                    value * calendar.monthrange(year, month)[1]
+                    for month, value in months.items()
+                )
+            else:
+                total = sum(months.values()) / len(months)
+            yearly[str(year)] = round(total, 3)
+        if yearly:
+            annual[parameter] = yearly
+
+    years = sorted({int(year) for series in annual.values() for year in series})
+    return NASAResult(
+        latitude=result.latitude,
+        longitude=result.longitude,
+        elevation_m=result.elevation_m,
+        parameters=annual,
+        fill_value=result.fill_value,
+        source_title=result.source_title,
+        api_version=result.api_version,
+        sources=list(result.sources),
+        messages=list(result.messages),
+        start=str(years[0]) if years else None,
+        end=str(years[-1]) if years else None,
+    )
+
+
 class NASAPowerClient:
     def __init__(
         self,
@@ -274,6 +347,51 @@ class NASAPowerClient:
             start=start_text,
             end=end_text,
         )
+        self.cache.set(key, result, ttl_seconds=self.daily_cache_ttl_seconds)
+        return result
+
+    async def get_annual(
+        self,
+        latitude: float,
+        longitude: float,
+        *,
+        start_year: int = 2001,
+        end_year: int | None = None,
+        parameters: tuple[str, ...] = ANNUAL_PARAMETERS,
+    ) -> NASAResult:
+        """Yearly values used for long-term climate trend detection.
+
+        NASA POWER's temporal API exposes hourly, daily, monthly and
+        climatology products but no ``annual`` product. We fetch the monthly
+        series and aggregate it locally into ``"2001"``, ``"2002"``... keys.
+        This is still gridded reanalysis data, not a forecast.
+        """
+
+        end = end_year or date.today().year
+        start = max(1981, min(start_year, end - 1))
+        start_text = str(start)
+        end_text = str(end)
+        key = (
+            f"annual:{latitude:.3f}:{longitude:.3f}:{start_text}:{end_text}:"
+            f"{self.community}:{','.join(parameters)}"
+        )
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+
+        monthly = await self._request(
+            "monthly/point",
+            latitude=latitude,
+            longitude=longitude,
+            parameters=parameters,
+            start=start_text,
+            end=end_text,
+        )
+        result = aggregate_monthly_to_annual(monthly)
+        if not result.parameters:
+            raise NASAAPIError(
+                "NASA POWER aylık verisi yıllık eğilim için yeterli değil."
+            )
         self.cache.set(key, result, ttl_seconds=self.daily_cache_ttl_seconds)
         return result
 

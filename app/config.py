@@ -23,12 +23,12 @@ class Settings(BaseSettings):
 
     # --- Application ------------------------------------------------------
     app_name: str = "Project Alphecca API"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     environment: str = "development"
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8000
-    ui_base_url: str = "http://127.0.0.1:8501"
+    ui_base_url: str = "/app/"
     log_level: str = "INFO"
     cors_origins: str = "*"
 

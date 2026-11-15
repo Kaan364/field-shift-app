@@ -125,12 +125,58 @@ def daily_payload(end: date | None = None) -> dict:
     }
 
 
+def annual_payload() -> dict:
+    """Synthetic 2001-2025 annual series with a mild warming/drying trend."""
+
+    years = list(range(2001, 2026))
+    t2m = {}
+    tmax = {}
+    tmin = {}
+    precip = {}
+    moisture = {}
+    for index, year in enumerate(years):
+        key = str(year)
+        t2m[key] = round(10.0 + index * 0.04, 2)
+        tmax[key] = round(20.0 + index * 0.05, 2)
+        tmin[key] = round(1.0 + index * 0.03, 2)
+        precip[key] = round(430.0 - index * 2.0, 1)
+        moisture[key] = round(0.55 - index * 0.002, 3)
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [32.85, 39.93, 1128.1]},
+        "properties": {
+            "parameter": {
+                "T2M": t2m,
+                "T2M_MAX": tmax,
+                "T2M_MIN": tmin,
+                "PRECTOTCORR": precip,
+                "GWETROOT": moisture,
+            }
+        },
+        "header": {
+            "title": "POWER Annual",
+            "api": {"version": "v2.10.1"},
+            "fill_value": -999.0,
+            "start": "2001",
+            "end": "2025",
+        },
+        "messages": ["test fixture"],
+    }
+
+
 class FakeNASA:
     """Drop-in stand-in for NASAPowerClient used by API tests."""
 
-    def __init__(self, climatology: dict | None = None, daily: dict | None = None, error: str | None = None):
+    def __init__(
+        self,
+        climatology: dict | None = None,
+        daily: dict | None = None,
+        annual: dict | None = None,
+        error: str | None = None,
+    ):
         self.climatology = climatology or climatology_payload()
         self.daily = daily or daily_payload()
+        self.annual = annual_payload() if annual is None else annual
         self.error = error
         self.cache = TTLCache(0)
         self.calls = 0
@@ -145,6 +191,11 @@ class FakeNASA:
         if self.error:
             raise NASAAPIError(self.error)
         return parse_nasa_payload(self.daily)
+
+    async def get_annual(self, latitude: float, longitude: float, **kwargs) -> NASAResult:
+        if self.error:
+            raise NASAAPIError(self.error)
+        return parse_nasa_payload(self.annual)
 
     async def aclose(self) -> None:
         return None

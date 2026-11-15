@@ -7,12 +7,14 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from json import dumps as json_dumps
+from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.ai.base import AIProviderError
 from app.ai.factory import ai_is_configured, build_ai_provider
@@ -23,6 +25,7 @@ from app.config import Settings, get_settings
 from app.logging_conf import configure_logging
 from app.schemas import AnalyzeRequest, ApiInfo, HealthResponse
 from app.services.advice import AdviceService
+from app.services.farm_plan import FarmPlanService
 from app.services.recommendation import AnalysisError, RecommendationService
 
 logger = logging.getLogger(__name__)
@@ -110,6 +113,7 @@ def create_app(
     ai = ai_provider or build_ai_provider(settings)
     recommender = RecommendationService(nasa, ai, settings)
     advice_service = AdviceService(recommender, nasa, ai, settings)
+    farm_plan_service = FarmPlanService(recommender, advice_service, nasa, settings)
     if geocoder is not _UNSET:
         geocoder_client = geocoder
     elif settings.geocoding_enabled:
@@ -139,8 +143,8 @@ def create_app(
         version=settings.app_version,
         description=(
             "NASA POWER verileri + açıklanabilir agronomi kuralları + değiştirilebilir LLM "
-            "katmanı ile çiftçiler için karar destek API'si. UI ayrı geliştirilecektir; "
-            "bu servis JSON API'si ve Swagger arayüzü sunar."
+            "katmanı ile çiftçiler için karar destek API'si. Telefon uyumlu çiftçi arayüzü "
+            "`/app/` altında, Swagger bu adreste: `/docs`."
         ),
         lifespan=lifespan,
         docs_url="/docs",
@@ -148,11 +152,15 @@ def create_app(
         openapi_url="/openapi.json",
     )
 
+    web_dir = Path(__file__).resolve().parent.parent / "web"
+    index_file = web_dir / "index.html"
+
     app.state.settings = settings
     app.state.nasa = nasa
     app.state.ai = ai
     app.state.recommender = recommender
     app.state.advice = advice_service
+    app.state.farm_plan = farm_plan_service
     app.state.geocoder = geocoder_client
 
     origins = settings.cors_origin_list
@@ -219,7 +227,17 @@ def create_app(
         )
 
     @app.get("/", response_model=ApiInfo, tags=["system"])
-    async def root() -> ApiInfo:
+    async def root(request: Request):
+        """Serve the mobile farmer app to browsers, JSON to API clients.
+
+        Opening the deployed URL on a phone shows the farmer interface; API
+        clients that send ``Accept: application/json`` keep getting the
+        machine-readable service description (and the test suite relies on it).
+        """
+
+        accept = request.headers.get("accept", "")
+        if index_file.exists() and "text/html" in accept.lower():
+            return FileResponse(index_file, headers={"Cache-Control": "no-cache"})
         return ApiInfo(
             name=settings.app_name,
             version=settings.app_version,
@@ -229,6 +247,11 @@ def create_app(
             docs_url="/docs",
             openapi_url="/openapi.json",
             endpoints={
+                "farmer_app": "GET /app/",
+                "farm_plan": "POST /api/v1/farm-plan",
+                "rotation": "POST /api/v1/rotation",
+                "soil_health": "POST /api/v1/soil-health",
+                "water_plan": "POST /api/v1/water-plan",
                 "analyze": "POST /api/v1/analyze",
                 "advice": "POST /api/v1/advice",
                 "environment": "GET /api/v1/environment",
@@ -236,7 +259,7 @@ def create_app(
                 "crops": "GET /api/v1/crops",
                 "ai_providers": "GET /api/v1/ai-providers",
                 "health": "GET /health",
-                "geolocation_page": "GET /geo?next=http://127.0.0.1:8501",
+                "geolocation_page": "GET /geo?next=/app/",
             },
             example_request=_example_request(),
         )
@@ -251,8 +274,13 @@ def create_app(
 
         target = (next or settings.ui_base_url).strip()
         parsed = urlparse(target)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        absolute = parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+        if not absolute and not target.startswith("/"):
             target = settings.ui_base_url
+            if not target.startswith("/"):
+                parsed = urlparse(target)
+                if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                    target = "/app/"
         return HTMLResponse(GEO_PAGE.replace("__TARGET__", json_dumps(target)))
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
@@ -272,6 +300,10 @@ def create_app(
         )
 
     app.include_router(router)
+
+    if web_dir.exists():
+        app.mount("/app", StaticFiles(directory=str(web_dir), html=True), name="farmer-web")
+
     return app
 
 

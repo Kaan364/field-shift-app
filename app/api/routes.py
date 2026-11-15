@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request
 
 from app.ai.provider_info import AI_PROVIDER_INFO
+from app.domain.crop_meta import traits_for
 from app.domain.crops import CROP_CATALOG
 from app.schemas import (
     AdviceRequest,
@@ -16,9 +17,14 @@ from app.schemas import (
     AnalyzeResponse,
     CropInfo,
     EnvironmentResponse,
+    FarmPlanRequest,
+    FarmPlanResponse,
     FieldProfile,
     GeocodeResponse,
     Location,
+    RotationResponse,
+    SoilHealthResponse,
+    WaterPlanResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["agronomy"])
@@ -90,21 +96,69 @@ async def reverse_geocode(
     "/crops", response_model=list[CropInfo], summary="Desteklenen ekin kataloğu"
 )
 async def crops() -> list[CropInfo]:
-    return [
-        CropInfo(
-            key=crop.key,
-            name=crop.name,
-            local_name=crop.local_name,
-            category=crop.category,
-            growing_days=crop.growing_days,
-            water_need_mm=crop.water_need_mm,
-            planting_months=list(crop.planting_months),
-            planting_window=crop.planting_window("tr"),
-            nitrogen_need=crop.nitrogen_need,
-            notes=crop.notes,
+    output: list[CropInfo] = []
+    for crop in CROP_CATALOG.values():
+        traits = traits_for(crop.key)
+        output.append(
+            CropInfo(
+                key=crop.key,
+                name=crop.name,
+                local_name=crop.local_name,
+                category=crop.category,
+                growing_days=crop.growing_days,
+                water_need_mm=crop.water_need_mm,
+                planting_months=list(crop.planting_months),
+                planting_window=crop.planting_window("tr"),
+                nitrogen_need=crop.nitrogen_need,
+                notes=crop.notes,
+                icon=traits.icon,
+                family=traits.family,
+                family_label=traits.family_label,
+                rotation_role=traits.role,
+                rotation_benefit=traits.benefit,
+            )
         )
-        for crop in CROP_CATALOG.values()
-    ]
+    return output
+
+
+@router.post(
+    "/farm-plan",
+    response_model=FarmPlanResponse,
+    summary="Tek çağrıda tam çiftlik planı: bu yıl + 3 yıllık rotasyon + toprak + su + iklim",
+)
+async def farm_plan(payload: FarmPlanRequest, request: Request) -> FarmPlanResponse:
+    service = request.app.state.farm_plan
+    return await service.plan(payload)
+
+
+@router.post(
+    "/rotation",
+    response_model=RotationResponse,
+    summary="Çok yıllık ekim nöbeti (rotasyon) planı",
+)
+async def rotation(payload: FarmPlanRequest, request: Request) -> RotationResponse:
+    service = request.app.state.farm_plan
+    return await service.rotation(payload)
+
+
+@router.post(
+    "/soil-health",
+    response_model=SoilHealthResponse,
+    summary="Toprak sağlığı karnesi ve iyileştirme adımları",
+)
+async def soil_health(payload: FarmPlanRequest, request: Request) -> SoilHealthResponse:
+    service = request.app.state.farm_plan
+    return await service.soil_health(payload)
+
+
+@router.post(
+    "/water-plan",
+    response_model=WaterPlanResponse,
+    summary="Aylık su dengesi, sulama ihtiyacı ve su tasarrufu önerileri",
+)
+async def water_plan(payload: FarmPlanRequest, request: Request) -> WaterPlanResponse:
+    service = request.app.state.farm_plan
+    return await service.water_plan(payload)
 
 
 @router.get(

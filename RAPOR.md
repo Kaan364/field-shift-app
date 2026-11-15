@@ -1,14 +1,19 @@
 # Project Alphecca — Teknik Rapor
 
-**Tarih:** 14 Kasım 2026  
-**Kapsam:** Python/FastAPI backend, NASA POWER entegrasyonu, açıklanabilir agronomi motoru, değiştirilebilir AI katmanı, testler ve değerlendirme.  
-**Durum:** Çalışır backend + 44 otomatik test + canlı NASA doğrulaması. UI kapsam dışı (sonra eklenecek).
+**Tarih:** 15 Kasım 2026  
+**Kapsam:** Python/FastAPI backend, NASA POWER entegrasyonu, açıklanabilir agronomi motoru, çok yıllık ekim nöbeti, toprak/su/iklim modülleri, çiftçi PWA'sı, değiştirilebilir AI katmanı, testler ve değerlendirme.  
+**Durum:** Çalışır backend + çiftçi web uygulaması (`/app/`) + otomatik testler + canlı NASA doğrulaması.
+
+> **Sürüm 0.2.0 notu (15 Kasım 2026):** Bu raporun ilk sürümü yalnızca backend'i kapsıyordu. Bu sürümde
+> telefonda kullanılabilen sade Türkçe PWA (`web/`), 2–4 yıllık ekim nöbeti motoru, 9 göstergeli toprak
+> karnesi, aylık su dengesi (ton/m³), 2001–bugün iklim eğilimi ve 5 yeni ürün (toplam 21) eklendi.
+> Güncel uçlar ve dağıtım için [README.md](README.md), değişiklikler için [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
 ## 1. Yönetici özeti
 
-Project Alphecca, bir çiftçinin konum ve tarla bilgilerini alıp NASA POWER iklim/toprak verisiyle birleştiren, 16 ekin arasından açıklanabilir bir puanlama yapan ve sonucu bir LLM ile gerekçelendiren bir karar destek backend'idir.
+Project Alphecca, bir çiftçinin konum ve tarla bilgilerini alıp NASA POWER iklim/toprak verisiyle birleştiren, 21 ekin arasından açıklanabilir bir puanlama yapan ve sonucu bir LLM ile gerekçelendiren bir karar destek uygulamasıdır. Çiftçi arayüzü `web/` altındaki PWA'dır; Streamlit uzman/test modu olarak korunur.
 
 Teknik olarak en önemli karar şudur: **AI'ı tek başına "ekin seçici" yapmadım.** LLM'ler agronomik hesabı güvenilir biçimde yapamaz, olmayan toprak verisini uydurabilir ve her çağrıda farklı sonuç verebilir. Bu nedenle:
 
@@ -43,7 +48,7 @@ Agronomi katmanı
   └─ son 30 gün: yağış, kuraklık aralığı, min/max sıcaklık
         │
         ▼
-Kural motoru (16 ekin)
+Kural motoru (21 ekin)
   ├─ sezonluk sıcaklık, su dengesi, pH, doku, tuzluluk
   ├─ iklim riski, hedef uyumu, pazar, ekim takvimi
   └─ 0-100 rule_score + bileşen kırılımı + kısıtlar
@@ -88,7 +93,7 @@ JSON: final_score == rule_score (AI sıralamayı değiştiremez)
 | `app/clients/nasa_power.py` | NASA istemcisi, `-999` temizliği, TTL cache, retry |
 | `app/clients/geocoding.py` | Nominatim ters coğrafi kodlama, TTL cache, User-Agent |
 | `app/services/agronomy.py` | NASA verisinden iklim/toprak özeti, ET0, sezon metrikleri |
-| `app/domain/crops.py` | 16 ekin, TR/EN alias, katalog doğrulaması |
+| `app/domain/crops.py` | 21 ekin, TR/EN alias, katalog doğrulaması |
 | `app/domain/scoring.py` | Açıklanabilir puanlama ve sert agronomik limitler |
 | `app/services/recommendation.py` | Ortak NASA + kural hattı (`prepare`), `/analyze` orkestrasyonu |
 | `app/services/advice.py` | Serbest metinli çiftçi akışı: kural sıralaması + sade dilli açıklama |
@@ -394,7 +399,7 @@ POWER daily endpoint'i geçmişe dönük/gecikmeli veridir; 7 günlük tahmin de
 
 ### 8.5. "Dünyadaki tüm çiftçiler" — tek global model gerçekçi değil
 
-16 ekin ve tek ağırlık seti dünya çapında yeterli değil. Ülke/bölge bazında:
+21 ekin ve tek ağırlık seti dünya çapında yeterli değil. Ülke/bölge bazında:
 
 - yerel ekinler ve çeşitler,
 - toprak tipleri ve analiz yöntemleri,

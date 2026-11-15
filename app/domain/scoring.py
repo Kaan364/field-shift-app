@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-from app.domain.crops import CROPS, CropProfile, TEXTURE_GROUP, resolve_crops
+from app.domain.crops import CROPS, CropProfile, TEXTURE_GROUP, resolve_crop, resolve_crops
 from app.schemas import (
     AnalyzeRequest,
     EnvironmentSnapshot,
@@ -27,14 +27,15 @@ from app.services.agronomy import (
 
 COMPONENT_WEIGHTS: dict[str, float] = {
     "temperature": 0.20,
-    "water": 0.24,
+    "water": 0.23,
     "ph": 0.10,
     "texture": 0.10,
     "salinity": 0.04,
-    "climate_risk": 0.10,
-    "goal_fit": 0.14,
-    "market": 0.05,
+    "climate_risk": 0.09,
+    "goal_fit": 0.12,
+    "market": 0.04,
     "calendar": 0.03,
+    "rotation": 0.05,
 }
 
 COMPONENT_LABELS_TR = {
@@ -47,6 +48,7 @@ COMPONENT_LABELS_TR = {
     "goal_fit": "Hedefe uygunluk",
     "market": "Pazar",
     "calendar": "Ekim takvimi",
+    "rotation": "Ekim nöbeti",
 }
 
 TEXTURE_ORDER = ["light", "light_medium", "medium", "medium_heavy", "heavy"]
@@ -130,6 +132,35 @@ def _goal_fit_score(crop: CropProfile, goal: Goal) -> float:
     else:  # pragma: no cover - enum is exhaustive
         value = 0.5
     return round(100.0 * value, 1)
+
+
+def _rotation_score(crop: CropProfile, previous_crop_name: str | None) -> float | None:
+    """Penalty/bonus for planting after the previous season's crop.
+
+    Repeating the same crop or family increases disease, pest and nutrient
+    pressure. A preceding legume leaves nitrogen for the next crop. When the
+    previous crop is unknown the component is omitted and weights renormalise.
+    """
+
+    if not previous_crop_name:
+        return None
+    previous = resolve_crop(previous_crop_name)
+    if previous is None:
+        return None
+    from app.domain.crop_meta import traits_for
+
+    previous_traits = traits_for(previous.key)
+    current_traits = traits_for(crop.key)
+    if previous.key == crop.key:
+        return 25.0
+    if previous_traits.family == current_traits.family:
+        return 45.0
+    score = 85.0
+    if previous_traits.nitrogen_fixing:
+        score += 10.0
+    if current_traits.nitrogen_fixing and previous_traits.family == "cereal":
+        score += 5.0
+    return min(100.0, score)
 
 
 def _market_score(crop: CropProfile, market_access: str) -> float:
@@ -227,6 +258,8 @@ def _build_messages(
             strengths.append("Pazar talebi güçlü")
         elif key == "goal_fit" and score >= 80:
             strengths.append("Çiftçinin hedefiyle güçlü uyum")
+        elif key == "rotation" and score >= 80:
+            strengths.append("Ekim nöbeti uygun (önceki ürüne göre hastalık/azot dengesi iyi)")
         elif score <= 50 and key == "temperature":
             limits.append(
                 f"Sıcaklık sınırda (sezon ort. {season.mean_temp_c}°C; optimum "
@@ -254,6 +287,11 @@ def _build_messages(
             limits.append("Pazar erişimi bu ürün için sınırlı olabilir")
         elif score <= 50 and key == "goal_fit":
             limits.append(f"{label} seçilen hedefe göre düşük")
+        elif score <= 50 and key == "rotation":
+            limits.append(
+                "Ekim nöbeti riskli: aynı ürün veya aynı familya üst üste geliyor; "
+                "hastalık ve besin tükenmesi riski artar"
+            )
 
     return strengths, limits
 
@@ -288,6 +326,7 @@ def evaluate_crop(
     components["goal_fit"] = _goal_fit_score(crop, request.preferences.goal)
     components["market"] = _market_score(crop, request.preferences.market_access.value)
     components["calendar"] = _calendar_score(crop, request.preferences.planting_month)
+    components["rotation"] = _rotation_score(crop, field.previous_crop)
 
     present = {key: value for key, value in components.items() if value is not None}
     total_weight = sum(COMPONENT_WEIGHTS[key] for key in present)

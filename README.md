@@ -1,332 +1,268 @@
-# Project Alphecca
+# Tarla Dostu — Project Alphecca
 
-Çiftçiler için **NASA POWER verisi + açıklanabilir agronomi kuralları + değiştirilebilir LLM katmanı** ile çalışan, Python/FastAPI tabanlı karar destek backend'i.
+Çiftçiler için **NASA POWER verisi + açıklanabilir agronomi kuralları + değiştirilebilir LLM katmanı** ile çalışan karar destek uygulaması.
 
-> Çekirdek ürün **backend**'dir. Üzerine, tüm işlevleri tarayıcıdan denemek için hafif bir **Streamlit arayüzü** eklendi (`ui/app.py`). Arayüz iş mantığı içermez; yalnızca JSON API'sine istek atar. Üretim arayüzü yine bu API'nin üzerine kurulabilir.
+> **Telefonda aç, üç soruya cevap ver, ekim planını oku.**
+> Uygulama artık tek bir adreste çalışır: **`/app/`** (yerelde <http://127.0.0.1:8000/app/>). Aynı FastAPI süreci hem JSON API'sini hem de çiftçi arayüzünü sunar. Streamlit arayüzü uzman/test modu olarak korunmuştur.
 
-Arayüzün ön yüzü **çiftçi için** tasarlandı: haritadan tarla seçimi, üç basit soru, isteğe bağlı serbest metin ve tek düğme. Ayrıntılı iklim/toprak verisi ve puan kırılımı yalnızca "Detaylı bilgi" kutusu işaretlenince görünür.
+Arayüz sade Türkçe, büyük düğmeler, simgeler ve sesli okuma ile düşük okuryazarlıklı kullanıcılar için tasarlandı. Teknik ayrıntılar katlanır kutuların içinde; ana ekranda yalnızca "bu yıl ne ek, sonraki yıllar ne ek, toprağım ve suyum ne durumda" görünür.
 
 ---
 
 ## 1. Ne yapıyor?
 
-1. Çiftçiden konum (lat/lon), tarla bilgisi (toprak dokusu, pH, organik madde, tuzluluk), kaynaklar (sulama, su, bütçe) ve tercihler (hedef, ilgi/hariç ekinler, ekim ayı) alır.
-2. **NASA POWER** API'sinden 25 yıllık aylık iklim klimatolojisini ve son 30 günün günlük hava/toprak nemi verisini çeker.
-3. Veriyi normalize eder: sıcaklık, yağış, don/sıcak stresi, kuraklık sınıfı, toprak nemi/sıcaklığı, sezonluk su dengesi.
-4. 16 ekinlik şeffaf bir kural motoruyla **0-100 uygunluk puanı** ve bileşen kırılımı üretir.
-5. Seçilen AI sağlayıcısı (Gemini, OpenAI, Claude, Groq, Mistral, DeepSeek, yerel Ollama...) adayları yeniden değerlendirir; gerekçe, risk ve aksiyon üretir.
-6. Nihai puan `%65 kural + %35 AI` olarak birleştirilir; AI çökerse deterministik motor devreye girer.
-7. Sonuç: sıralı ekin önerileri, gerekçeler, riskler, uygulanabilir aksiyonlar, veri kaynakları, uyarılar ve yasal sorumluluk reddi.
+Tek bir istek (`POST /api/v1/farm-plan`) şunları üretir:
 
-### Çiftçi akışı (`POST /api/v1/advice`)
+1. **Bu yılın en iyi ürünü** — NASA iklim verisi + toprak + sulama + hedefe göre 0-100 puan.
+2. **2, 3 veya 4 yıllık ekim nöbeti (rotasyon)** — ilk yıl mevcut yılın önerisiyle başlar; aynı familyayı üst üste koymaz, baklagil/anız/kök çeşitliliğini ödüllendirir, su ihtiyacını hesaplar.
+3. **Toprak sağlığı karnesi (A–D)** — organik madde, pH, bünye, tuzluluk, drenaj, NASA toprak nemi/sıcaklığı, eğim ve rotasyon çeşitliliği olmak üzere 9 gösterge; eksik veriyi açıkça söyler.
+4. **Su karnesi** — aylık yağış/buharlaşma dengesi, sezonluk açık; **dönüm başına ton** ve tarla toplamı m³ olarak.
+5. **İklim eğilimi** — NASA POWER aylık verisinden 2001'den bugüne yıllıklaştırılmış sıcaklık/yağış eğilimi ve kuraklık riski. *Tahmin değil, geçmiş verinin yönü.*
+6. **Sade dilli yapılacaklar** — ilk adımlar, yetiştirme, gübreleme, bakım, riskler ve alternatif ürünler.
+7. **Belirsizlik ve sınırlar** — veri boşlukları, uyarılar, veri kaynakları ve yasal sorumluluk reddi.
 
-Bu uç, "ben ne ekeceğimi bilmiyorum" diyen bir çiftçi için tasarlandı:
+AI (Gemini, OpenAI, Claude, Groq, Mistral, DeepSeek, Ollama…) yalnızca **açıklamayı** yazar. Sıralamayı deterministik kural motoru belirler; AI anahtarı yoksa uygulama eksiksiz çalışır.
 
-1. Çiftçi haritadan tarlasını seçer (veya tarayıcı konum iznini verir) ve 3-4 basit soruyu yanıtlar.
-2. İsterse kendi cümleleriyle derdini yazar (serbest metin, en fazla 2000 karakter).
-3. Sunucu NASA POWER verisini çeker ve kural motoru adayları puanlar.
-4. AI **yalnızca açıklama** yazar: ne ekmeli, nasıl büyütmeli, nasıl beslemeli, nasıl bakmalı, riskler ve eksik bilgiler.
-5. AI anahtarı yoksa veya hata verirse aynı yapı deterministik şablonla üretilir; istek yine başarılı döner.
+### Çiftçi web uygulaması (`/app/`)
 
-Bu akışta AI'nın sıralamaya etkisi **yoktur**: `final_score == rule_score`. AI yeni bir ekin adı uyduramaz; aday listesi dışındaki isimler ayıklanır.
+- **3 adımlı sihirbaz:** konum → tarla/su → hedef. Haritaya dokunma, tarayıcı konumu veya 25 il kısayolu.
+- **Harita:** Leaflet + OpenStreetMap; tarla işaretçisi, ters coğrafi kodlama (Nominatim).
+- **Büyük dokunma hedefleri** ve `A+` yazı büyütme; `prefers-reduced-motion` ve yüksek kontrast desteği.
+- **Sonuç ekranı:** yıl yıl ekim zaman çizelgesi, puan karnesi, toprak/su/iklim kartları, işaretlenebilir yapılacaklar listesi.
+- **Dinle** (tarayıcı sesi, `tr-TR`), **Yazdır**, **Paylaş** (Web Share / panoya kopyala), **JSON indir**.
+- **Çevrimdışı:** uygulama kabuğu service worker ile önbelleğe alınır; son plan `localStorage`'da saklanır ve internetsiz açılabilir. Yeni plan için bağlantı gerekir.
+- **PWA:** ana ekrana eklenebilir (`manifest.webmanifest`, maskelenebilir ikonlar).
+- **Erişilebilirlik:** klavye odağı, `aria-live` durum mesajları, Renk + simge + metin birlikte kullanılır.
 
 ### Önemli veri gerçeği
 
 NASA POWER **toprak verimliliği / N-P-K / pH / organik madde sağlamaz.** Yalnızca grid tabanlı iklim, toprak nemi ve toprak sıcaklığı proxy'leri sağlar. Bu nedenle:
 
-- pH, organik madde, tuzluluk ve doku **çiftçi girdisi** olarak alınır.
+- pH, organik madde, tuzluluk ve doku **çiftçi girdisi** olarak alınır; boş bırakılabilir.
 - Besin analizi eksikse API bunu `data_gaps` ve `notes` alanlarında açıkça söyler.
 - NASA POWER çözünürlüğü ~0.5° × 0.625°'dir; tarla ölçeğinde değildir.
+- İklim eğilimi geçmiş yılların doğrusal yönüdür; resmî iklim projeksiyonu değildir.
 
 ---
 
-## 2. Hızlı başlangıç (Windows PowerShell)
+## 2. Hızlı başlangıç
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/Kaan364/field-shift-app.git
+cd field-shift-app
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+
+# İstersen AI anahtarı ekle; gerekmiyor.
+cp .env.example .env
+
+python run.py
+# veya: uvicorn app.main:app --reload
+```
+
+### Windows (PowerShell)
 
 ```powershell
-cd "$env:USERPROFILE\Desktop\Project Alphecca"
+git clone https://github.com/Kaan364/field-shift-app.git
+cd field-shift-app
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 
 Copy-Item .env.example .env
-# İsterseniz .env içinde AI_PROVIDER / AI_API_KEY ayarlayın.
-# Hiç anahtar yoksa deterministik motor çalışır.
-
 python run.py
 ```
 
-- Swagger: <http://127.0.0.1:8000/docs>
-- Health: <http://127.0.0.1:8000/health>
-- Alternatif: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
+Açılacak adresler:
+
+| Adres | Ne gösterir |
+|---|---|
+| <http://127.0.0.1:8000/app/> | **Çiftçi uygulaması** (telefon uyumlu) |
+| <http://127.0.0.1:8000/> | Tarayıcıda çiftçi uygulaması, API istemcisinde JSON API özeti |
+| <http://127.0.0.1:8000/docs> | Swagger / OpenAPI |
+| <http://127.0.0.1:8000/health> | Sağlık durumu |
+
+### Docker
+
+```bash
+docker compose up --build
+# http://127.0.0.1:8000/app/
+```
+
+### Tek komutla doğrula + paketle
+
+```bash
+./scripts/build.sh          # sözdizimi + testler + dist/ paketi
+make test                   # yalnızca testler
+make run                    # geliştirme sunucusu
+make docker                 # imaj derle
+```
+
+`scripts/build.sh` sonunda `dist/tarla-dostu-<sürüm>-<tarih>.tar.gz` ve SHA-256 dosyası oluşur. Paket, `app/` + `web/` + bağımlılıkların tarifini içerir; hedef makinede `pip install -r requirements.txt` ve `uvicorn app.main:app` ile çalışır. Ön yüz derleme adımı yoktur (vanilla HTML/CSS/JS).
 
 ---
 
-## 2.1 Test arayüzü (Streamlit)
+## 3. Streamlit uzman arayüzü (isteğe bağlı)
 
-Backend'i ve arayüzü **tek komutla** başlatır:
+Backend'i ve eski uzman arayüzünü birlikte başlatır:
 
-```powershell
-cd "$env:USERPROFILE\Desktop\Project Alphecca"
-.\.venv\Scripts\python.exe -m pip install -r requirements-ui.txt
-.\.venv\Scripts\python.exe run_ui.py
+```bash
+python -m pip install -r requirements-ui.txt
+python run_ui.py
+# http://127.0.0.1:8501
 ```
 
-- Arayüz: <http://127.0.0.1:8501>
 - Backend zaten açıksa: `python run_ui.py --no-backend`
 - Farklı portlar: `python run_ui.py --api-port 8001 --ui-port 8502`
+- Sekmeler: Analiz, Çevre Verisi, Ürün Kataloğu (21 ürün), AI Sağlayıcıları, Sistem & Konsol.
 
-`run_ui.py` backend ayakta değilse kendisi başlatır, arayüz kapanınca yalnızca kendi başlattığı backend'i durdurur.
-
-### Arayüz: çiftçi modu + uzman modu
-
-**Çiftçi modu (varsayılan, üstte):**
-
-1. **Harita.** OpenStreetMap üzerinde tarlaya dokunulur; nokta ve ~1,2 km'lik alan işaretlenir.
-   Koordinat, OpenStreetMap Nominatim ile yer adına çevrilip gösterilir (API anahtarı gerekmez).
-2. **Tarayıcı konumu.** "📍 Konumumu otomatik bul" düğmesi `/geo` sayfasını açar; izin verilirse
-   `?lat=..&lon=..` ile arayüze döner ve harita oraya taşınır. (iframe'ler konum izni isteyemediği
-   için ayrı bir sayfa kullanılır.)
-3. **Üç basit soru.** Tarla büyüklüğü (dönüm), sulama imkânı, hedef ve ekim ayı.
-   Toprak dokusu/pH/organik madde isteğe bağlı bir bölümde; bilinmiyorsa boş bırakılır.
-4. **Serbest metin.** "Ne ekeceğimi bilmiyorum, nasıl bakacağımı da bilmiyorum" gibi kendi cümleleri.
-   "📝 Örnek yazıyı doldur" düğmesi örnek metni yazar.
-5. **Tek düğme.** "🌾 Bana ne ekeceğimi söyle" → kısa başlık, 3 ürün, ardından
-   "İlk yapman gerekenler / Nasıl büyütürüm / Nasıl beslerim / Nasıl bakarım / Dikkat et" başlıkları.
-6. **Detay kutusu.** "🔍 Detaylı bilgi göster (iklim, toprak, puanlar)" işaretlenirse aylık iklim
-   tablosu, grafikler, toprak nemi/sıcaklığı, puan kırılımı, uyarılar ve ham JSON açılır.
-
-**Uzman / test modu (altta, kapalı başlar):** tüm API uçlarını elle denemek için 5 sekme.
-
-| Sekme | Test ettiği uçlar | Ne yapar |
-|---|---|---|
-| 🌱 Analiz | `POST /api/v1/analyze` | Konum, toprak, kaynak, tercih formu → sıralı öneriler, puan kırılımı, riskler, aksiyonlar, çevre verisi, ham JSON |
-| 🌦️ Çevre Verisi | `GET /api/v1/environment` | Sadece NASA iklim/toprak özeti + aylık tablo ve grafikler |
-| 🌾 Ürün Kataloğu | `GET /api/v1/crops` | 16 ürünün parametreleri, arama/filtre, detay |
-| 🤖 AI Sağlayıcıları | `GET /api/v1/ai-providers` | Sağlayıcı karşılaştırması, güçlü/zayıf yönler |
-| 🩺 Sistem & Konsol | `GET /`, `/health`, serbest GET/POST | Sağlık durumu, kök endpoint, elle API deneme |
-
-Kenar çubuğunda API adresi, canlı bağlantı durumu ve Trakya/Ankara/İzmir gibi hazır konumlar bulunur.
-Hazır konum seçimi yalnızca enlem/boylamı doldurur; `region_name` etikettir, hesap koordinata göre yapılır.
-
-### Testler
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Testler NASA ve LLM çağrılarını taklit eder; internet veya API anahtarı gerektirmez.
-Arayüz için ayrıca `tests/test_ui_smoke.py` çalışır: Streamlit sayfasının API kapalıyken bile çökmeden açıldığını doğrular.
+Çiftçi için önerilen arayüz artık `/app/` altındaki PWA'dır; Streamlit daha çok API'yi elle denemek ve uzman çıktısını görmek içindir.
 
 ---
 
-## 3. API
+## 4. API
 
 | Metot | Yol | Açıklama |
 |---|---|---|
-| `GET` | `/` | API özeti ve örnek istek |
-| `GET` | `/health` | Sağlık, AI sağlayıcısı, coğrafi kodlama, cache durumu |
-| `GET` | `/api/v1/health` | Aynı sağlık kontrolü |
-| `GET` | `/api/v1/environment?latitude=..&longitude=..` | NASA verisinden iklim/toprak özeti (öneri yok) |
-| `GET` | `/api/v1/crops` | 16 ekinlik katalog |
+| `GET` | `/` | Tarayıcıya HTML uygulama, API istemcisine JSON özet |
+| `GET` | `/app/` | Çiftçi PWA'sı (statik) |
+| `GET` | `/health`, `/api/v1/health` | Sağlık, AI sağlayıcısı, cache durumu |
+| `GET` | `/api/v1/environment?latitude=..&longitude=..` | NASA verisinden iklim/toprak özeti |
+| `GET` | `/api/v1/crops` | 21 ürünün parametreleri, simgesi ve familyası |
 | `GET` | `/api/v1/ai-providers` | AI sağlayıcı karşılaştırması |
 | `POST` | `/api/v1/analyze` | Tam analiz ve sıralı öneriler |
 | `POST` | `/api/v1/advice` | Serbest metinli çiftçi sorusuna sade dilli plan |
+| `POST` | `/api/v1/farm-plan` | **Tam plan:** öneri + rotasyon + toprak + su + iklim |
+| `POST` | `/api/v1/rotation` | Yalnızca ekim nöbeti |
+| `POST` | `/api/v1/soil-health` | Yalnızca toprak sağlığı |
+| `POST` | `/api/v1/water-plan` | Yalnızca su dengesi |
 | `GET` | `/api/v1/reverse-geocode?latitude=..&longitude=..` | Koordinat → yer adı (Nominatim) |
-| `GET` | `/geo?next=...` | Tarayıcıdan konum izni isteyen yardımcı sayfa (HTML) |
+| `GET` | `/geo?next=/app/` | Tarayıcıdan konum izni isteyen yardımcı sayfa |
 
-### Örnek istek
+### Tek istekle tam plan
 
-```python
-import httpx
-
-payload = {
-    "location": {
-        "latitude": 39.93,
-        "longitude": 32.85,
-        "region_name": "Ankara"
-    },
-    "field": {
-        "area_hectares": 12.5,
-        "soil_texture": "clay_loam",
-        "soil_ph": 7.4,
-        "organic_matter_pct": 1.8,
-        "salinity_ds_m": 1.2
-    },
-    "resources": {
-        "irrigation": "limited",          # rainfed | limited | full
-        "water_availability": "medium",  # low | medium | high
-        "budget_usd": 6000,
-        "labor": "family",
-        "mechanization": "medium"
-    },
-    "preferences": {
-        "goal": "max_profit",             # max_yield | max_profit | low_water | low_input | organic | soil_health | risk_averse
-        "crops_of_interest": ["wheat", "chickpea"],
-        "excluded_crops": [],
-        "planting_month": 10,
-        "market_access": "medium",
-        "max_growing_days": None
-    },
-    "top_n": 5,
-    "language": "tr"                      # tr | en
-}
-
-response = httpx.post(
-    "http://127.0.0.1:8000/api/v1/analyze",
-    json=payload,
-    timeout=120,
-)
-response.raise_for_status()
-data = response.json()
-
-for rec in data["recommendations"]:
-    print(rec["rank"], rec["crop_name_local"], rec["scores"]["final_score"], rec["confidence"])
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/farm-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "location": {"latitude": 39.93, "longitude": 32.85, "region_name": "Ankara"},
+    "area_hectares": 12.5,
+    "soil_texture": "clay_loam",
+    "soil_ph": 7.4,
+    "organic_matter_pct": 1.8,
+    "irrigation": "limited",
+    "water_availability": "medium",
+    "goal": "soil_health",
+    "planting_month": 10,
+    "rotation_years": 3,
+    "top_n": 3,
+    "language": "tr"
+  }'
 ```
 
-### Örnek yanıt (kısaltılmış)
+Yanıtın ana bölümleri:
 
 ```json
 {
-  "analysis_id": "…",
-  "location": {"latitude": 39.93, "longitude": 32.85, "region_name": "Ankara"},
-  "environment": {
-    "climate": {
-      "annual_mean_temp_c": 10.31,
-      "annual_precip_mm": 418.2,
-      "aridity_index": 0.243,
-      "climate_class": "semi_arid",
-      "frost_months": ["Ocak", "Şubat", "…"],
-      "heat_stress_months": ["Mayıs", "…"]
-    },
-    "soil": {
-      "root_zone_moisture_mean": 0.551,
-      "soil_condition_score": 84.2,
-      "soil_condition_label": "iyi",
-      "data_gaps": ["NASA POWER besin elementleri (N-P-K) … sağlamaz; …"]
-    },
-    "recent_weather": {
-      "window_days": 30,
-      "available_days": 27,
-      "total_precip_mm": 20.0,
-      "longest_dry_spell_days": 11
-    }
+  "plan_id": "…",
+  "recommendations": [{"rank": 1, "crop_key": "wheat", "crop_name_local": "Kışlık Buğday", "scores": {"final_score": 87.2}}],
+  "rotation": {
+    "applicable": true,
+    "years_requested": 3,
+    "years": [
+      {"year": 1, "crop_key": "wheat", "crop_name_local": "Kışlık Buğday", "role": "Kışlık tahıl", "planting_window": "Ekim–Kasım", "water_need_mm": 450, "benefit": "…", "actions": ["…"]},
+      {"year": 2, "crop_key": "chickpea", "crop_name_local": "Nohut", "role": "Baklagil", "…": "…"},
+      {"year": 3, "crop_key": "barley", "crop_name_local": "Arpa", "…": "…"}
+    ],
+    "scores": {"overall": 78.4, "soil_health": 82, "water": 71, "resilience": 76, "profit": 65, "risk": 88},
+    "benefits": ["…"],
+    "cautions": ["…"],
+    "alternatives": [{"crop_names": ["…"], "total_water_mm": 1080, "scores": {"overall": 74.1}}]
   },
-  "recommendations": [
-    {
-      "rank": 1,
-      "crop_key": "wheat",
-      "crop_name_local": "Kışlık Buğday",
-      "scores": {
-        "rule_score": 93.7,
-        "ai_score": 93.7,
-        "final_score": 93.7,
-        "components": {
-          "temperature": 86.5,
-          "water": 100.0,
-          "ph": 100.0,
-          "texture": 100.0,
-          "salinity": null,
-          "climate_risk": 88.0,
-          "goal_fit": 71.9,
-          "market": 92.0,
-          "calendar": 100.0
-        }
-      },
-      "rationale": "Kışlık Buğday, bölge koşullarında 93.7/100 uygunluk aldı. …",
-      "risks": ["…"],
-      "actions": ["…"],
-      "planting_window": "Ekim–Kasım",
-      "growing_days": 240,
-      "water_need_mm": 450,
-      "confidence": "medium"
-    }
-  ],
-  "summary": "Ankara için mevcut verilerle en güçlü seçenek Kışlık Buğday …",
+  "soil_health": {"grade": "B", "score": 74.0, "summary": "…", "indicators": ["…"], "actions": ["…"], "data_gaps": ["…"]},
+  "water": {"crop_need_mm": 1180, "season_rain_mm": 336, "deficit_mm": 844, "deficit_m3": 10550, "deficit_ton_per_decare": 844, "months": ["…"], "tips": ["…"]},
+  "climate": {"available": true, "start_year": 2001, "end_year": 2025, "risk_level": "medium", "risk_label": "Orta", "trends": ["…"], "messages": ["…"]},
+  "advice": {"headline": "…", "why": "…", "steps": ["…"], "grow": ["…"], "feed": ["…"], "care": ["…"], "risks": ["…"]},
   "warnings": [],
-  "data_sources": ["NASA POWER - Climatology", "…"],
-  "ai": {
-    "provider": "heuristic",
-    "model": null,
-    "kind": "deterministic",
-    "used": true,
-    "fallback_used": false,
-    "latency_ms": 0
-  },
-  "disclaimer": "Bu çıktı bir karar destek aracıdır; verim, gelir veya kâr garantisi değildir. …"
+  "disclaimer": "Bu çıktı bir karar destek aracıdır; …"
 }
 ```
 
-> Not: Örnekteki bileşen değerleri tam olarak yukarıdaki istekle birebir aynı olmayabilir; NASA verisi ve ayarlarla değişir.
+> Örnek değerler NASA verisine ve girdilere göre değişir. Tam şema: `/docs` veya `/openapi.json`.
 
-### Örnek: çiftçi sorusu (`POST /api/v1/advice`)
+### Eski `analyze` isteği
 
-```json
-{
-  "location": {"latitude": 41.6771, "longitude": 26.5557, "region_name": "Edirne"},
-  "area_hectares": 2.0,
-  "irrigation": "limited",
-  "goal": "max_profit",
-  "planting_month": 10,
-  "free_text": "Tarlam Edirne'de. Ne ekeceğimi bilmiyorum. Nasıl bakacağımı da bilmiyorum.",
-  "top_n": 3,
-  "language": "tr"
-}
-```
-
-Yanıtın önemli kısmı (canlı NASA verisiyle üretilmiş gerçek çıktı):
-
-```json
-{
-  "advice": {
-    "headline": "Bu tarlada Kışlık Buğday ekmen en doğrusu. Alternatif: Arpa.",
-    "why": "Bölgende yıllık yağış yaklaşık 613 mm, ortalama sıcaklık 13.7°C. Kışlık Buğday bu koşullarda 91.1/100 aldı (yarı kurak iklim).",
-    "steps": ["Önce toprağını analiz ettir…", "Ekim zamanı: Ekim–Kasım…"],
-    "grow": ["Tohum yatağı ince ve düz olsun…"],
-    "feed": ["Gübreyi mutlaka toprak analizine göre ver…"],
-    "care": ["Bu bitki sezon boyunca yaklaşık 450 mm su ister…"],
-    "risks": ["…", "NASA verisi tarlanın tamamını değil, bölgeyi temsil eder."],
-    "ask_farmer": ["Toprağının pH değerini biliyor musun?"],
-    "confidence": "medium"
-  },
-  "recommendations": [
-    {"rank": 1, "crop_key": "wheat", "scores": {"rule_score": 91.1, "ai_score": null, "final_score": 91.1}}
-  ],
-  "ai": {"provider": "heuristic", "kind": "deterministic", "used": true, "fallback_used": false},
-  "environment": {"climate": {"annual_precip_mm": 613.0, "annual_mean_temp_c": 13.65}}
-}
-```
-
-`ai.kind` değeri `deterministic` ise açıklamayı kural motoru yazmıştır; `llm` ise bir dil modeli yazmıştır
-(sıralama yine kural motorundan gelir).
+`POST /api/v1/analyze` iç içe `field` / `resources` / `preferences` yapısını kullanır. `farm-plan`, `advice` ve yeni uçlar düz alanları (`area_hectares`, `soil_ph`, `irrigation`, `goal` …) kabul eder. Her iki sözleşme de geriye dönük uyumludur.
 
 ### Hata kodları
 
 | Kod | Anlam |
 |---|---|
-| `422` | Girdi doğrulama hatası veya filtrelere uyan ekin kalmadı (`no_candidates`) |
+| `422` | Girdi doğrulama hatası veya filtrelere uyan ürün kalmadı (`no_candidates`) |
 | `502` | NASA POWER'a ulaşılamadı (`nasa_power_unavailable`) |
 | `503` | AI sağlayıcısı yanıt veremedi ve fallback kapalı (`ai_unavailable`) |
 
 ---
 
-## 4. AI sağlayıcısı yapılandırma
+## 5. Puanlama ve modeller
 
-Varsayılan `heuristic` moddur: internet, API anahtarı ve ücret gerektirmez. **AI anahtarı zorunlu değildir**;
-anahtar olmadan da tüm uçlar (analiz ve serbest metinli öneri) çalışır, yalnızca açıklamalar deterministik
-şablonla üretilir.
+### Tek ürün puanı
+
+Dokuz bileşen hesaplanır; eksik veri varsa o bileşen ağırlıklandırmadan çıkarılır:
+
+| Bileşen | Ağırlık | Ne ölçer? |
+|---|---:|---|
+| Sıcaklık | %20 | Ürünün sezonluk sıcaklık aralığı |
+| Su dengesi | %24 | Sezon yağışı + sulama arzı / sezonluk su ihtiyacı |
+| Toprak pH'ı | %10 | pH optimum ve tolerans aralığı |
+| Toprak dokusu | %10 | Doku grubu uyumu |
+| Tuzluluk | %4 | EC eşiği ve tolerans |
+| İklim riski | %10 | Don, sıcak stresi, kuraklık sınıfı |
+| Hedefe uygunluk | %14 | Verim, kâr, az su, organik, toprak sağlığı vb. |
+| Pazar | %5 | Pazar talebi ve erişim |
+| Ekim takvimi | %3 | Çiftçinin planladığı ay |
+
+```text
+rule_score  = ağırlıklı bileşen ortalaması (0-100)
+final_score = (1 - AI_WEIGHT) * rule_score + AI_WEIGHT * ai_score
+```
+
+### Rotasyon puanı
+
+Hedefe göre ağırlıklar değişir ve her zaman 1.0'a toplanır:
+
+| Bileşen | Ne ödüllendirir? |
+|---|---|
+| Toprak sağlığı | Baklagil, anız örtüsü, familya çeşitliliği, farklı kök derinliği |
+| Su | Toplam su ihtiyacının yağış + sulama ile karşılanması, kuraklığa dayanıklılık |
+| İklim dayanıklılığı | Familya çeşitliliği, hastalık/zararlı baskısının kırılması |
+| Kâr potansiyeli | Brüt marj, pazar talebi, verim potansiyeli |
+| Risk güvenliği | Yüksek su ihtiyacı, yüksek azot ihtiyacı, zayıf uyum cezaları |
+
+Rotasyon **yıl 1'i mevcut yılın en iyi ürününe sabitler**; böylece çok yıllık plan tek yıllık öneriyle çelişmez. Aynı ürün tekrar etmez, aynı familya üst üste gelmez, çok yıllık ürünler (bağ, zeytin, elma) yıllık rotasyona sokulmaz.
+
+### Su dönüşümü
+
+1 mm su × 1 dönüm (1.000 m²) = 1 m³ = **1 ton**. API hem `deficit_mm`, hem `deficit_m3`, hem `deficit_ton_per_decare` döndürür.
+
+> Tüm puanlar **ön eleme** amaçlıdır; resmî verim tahmini, finansal model veya garanti değildir.
+
+---
+
+## 6. AI sağlayıcısı yapılandırma
+
+Varsayılan `heuristic` moddur: internet, API anahtarı ve ücret gerektirmez. **AI anahtarı zorunlu değildir.**
 
 ```env
 # Gemini (önerilen başlangıç)
-# Kasım 2026 itibarıyla güncel stabil model: gemini-3.5-flash-lite
-# gemini-2.5-flash 1 Aralık 2026'dan itibaren otomatik olarak 3.5-flash-lite'a yönlendiriliyor.
 AI_PROVIDER=gemini
 AI_API_KEY=...
 AI_MODEL=gemini-3.5-flash-lite
-
-# İsteğe bağlı: Gemini uç noktası / anahtar başlığı
-# Kimlik doğrulama x-goog-api-key başlığıyla yapılır; kod bunu otomatik ekler.
-# AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 
 # OpenAI
 # AI_PROVIDER=openai
@@ -350,113 +286,144 @@ AI_WEIGHT=0.35
 AI_FALLBACK_TO_HEURISTIC=true
 ```
 
-> Gemini 3.x ailesinde bazı örnekleme parametreleri kaldırıldığı için kod, `temperature` değerini yalnızca
-> `gemini-2*` modellerine gönderir. Model adını değiştirirseniz `GET /health` ile sağlayıcıyı doğrulayın.
-
-Harita ve yer adı için ayrı anahtar gerekmez; OpenStreetMap Nominatim kullanılır:
+Coğrafi kodlama ve konum sayfası:
 
 ```env
 GEOCODING_ENABLED=true
 GEOCODING_BASE_URL=https://nominatim.openstreetmap.org
 GEOCODING_LANGUAGE=tr
 GEOCODING_CACHE_TTL_SECONDS=86400
-# Tarayıcı konum sayfasının geri döneceği varsayılan adres
-UI_BASE_URL=http://127.0.0.1:8501
+# /geo sayfasının döneceği varsayılan adres (göreli yol olabilir)
+UI_BASE_URL=/app/
 ```
 
-Sağlayıcı listesi ve karşılaştırma: `GET /api/v1/ai-providers`. Ayrıntılı değerlendirme için [RAPOR.md](RAPOR.md).
+Sağlayıcı listesi: `GET /api/v1/ai-providers`. Ayrıntılı değerlendirme: [RAPOR.md](RAPOR.md).
 
 ---
 
-## 5. Puanlama mantığı
+## 7. Testler
 
-Her ekin için 9 bileşen hesaplanır; eksik veri varsa o bileşen ağırlıklandırmadan çıkarılır:
-
-| Bileşen | Ağırlık | Ne ölçer? |
-|---|---:|---|
-| Sıcaklık | %20 | Ekinin sezonluk sıcaklık aralığı |
-| Su dengesi | %24 | Sezon yağışı + sulama arzı / sezonluk su ihtiyacı |
-| Toprak pH'ı | %10 | pH optimum ve tolerans aralığı |
-| Toprak dokusu | %10 | Doku grubu uyumu |
-| Tuzluluk | %4 | EC eşiği ve tolerans |
-| İklim riski | %10 | Don, sıcak stresi, kuraklık sınıfı |
-| Hedefe uygunluk | %14 | Verim, kâr, az su, organik, toprak sağlığı vb. |
-| Pazar | %5 | Pazar talebi ve erişim |
-| Ekim takvimi | %3 | Çiftçinin planladığı ay |
-
-Nihai puan:
-
-```text
-rule_score  = ağırlıklı bileşen ortalaması (0-100)
-final_score = (1 - AI_WEIGHT) * rule_score + AI_WEIGHT * ai_score
+```bash
+python -m pytest -q
 ```
 
-Sert agronomik sınırlar (aşırı sıcaklık, ciddi su açığı, pH dışı, dona hassas çok yıllık) puanı ayrıca çarpanla düşürür. AI yalnızca sıralamayı ve açıklamayı etkiler; kural motorunun temel agronomik mantığını silemez.
-
-> Bu puanlama bir **ön eleme** aracıdır; resmî verim tahmini veya finansal model değildir.
+- NASA ve LLM çağrıları taklit edilir; **internet veya API anahtarı gerekmez**.
+- Kapsam: API sözleşmeleri, puanlama, agronomi, NASA istemcisi (aylık→yıllık toplama dahil), rotasyon değişmezleri, toprak/su hesapları, web arayüzü ve statik varlıklar, Streamlit smoke (kuruluysa).
+- `scripts/build.sh` testleri çalıştırmadan paket üretmez (isteğe bağlı `--skip-tests`).
 
 ---
 
-## 6. Proje yapısı
+## 8. Proje yapısı
 
 ```text
-Project Alphecca/
+field-shift-app/
 ├─ app/
-│  ├─ main.py                 # FastAPI app factory, /geo konum sayfası, health, hata yönetimi
-│  ├─ config.py               # .env / ortam değişkenleri (AI, NASA, geocoding, UI)
-│  ├─ schemas.py              # Pydantic istek/yanıt sözleşmesi (analyze + advice)
-│  ├─ api/routes.py           # /api/v1 uç noktaları
+│  ├─ main.py                 # FastAPI fabrikası, /app statik mount, kök HTML/JSON
+│  ├─ config.py               # .env / ortam değişkenleri
+│  ├─ schemas.py              # Pydantic sözleşmeleri (analyze, advice, farm-plan…)
+│  ├─ api/routes.py           # /api/v1 uçları
 │  ├─ clients/
-│  │  ├─ nasa_power.py        # NASA POWER istemcisi, cache, retry
-│  │  └─ geocoding.py         # Nominatim ters coğrafi kodlama (TTL cache)
+│  │  ├─ nasa_power.py        # NASA POWER istemcisi, retry, TTL cache, aylık→yıllık
+│  │  └─ geocoding.py         # Nominatim ters coğrafi kodlama
 │  ├─ domain/
-│  │  ├─ crops.py             # 16 ekinlik bilgi tabanı + TR/EN alias
-│  │  └─ scoring.py           # açıklanabilir kural motoru
+│  │  ├─ crops.py             # 21 ürün + TR/EN alias
+│  │  ├─ crop_meta.py         # simge, familya, rotasyon özellikleri
+│  │  ├─ scoring.py           # açıklanabilir kural motoru + rotasyon bileşeni
+│  │  ├─ rotation.py          # çok yıllık ekim nöbeti üreteci/puanlayıcı
+│  │  ├─ soil_health.py       # 9 göstergeli toprak karnesi
+│  │  └─ water.py             # aylık su dengesi, ton/m³ dönüşümü
 │  ├─ services/
 │  │  ├─ agronomy.py          # NASA verisini agronomik özete çevirir
-│  │  ├─ recommendation.py    # ortak NASA + kural hattı (prepare) ve /analyze
-│  │  └─ advice.py            # serbest metinli çiftçi akışı (/advice)
+│  │  ├─ recommendation.py    # ortak NASA + kural hattı
+│  │  ├─ advice.py            # sade dilli çiftçi planı
+│  │  ├─ climate.py           # yıllık eğilim, risk düzeyi, sade mesajlar
+│  │  └─ farm_plan.py         # tek istekte tam plan orkestrasyonu
 │  └─ ai/
 │     ├─ base.py              # AI sözleşmesi, prompt'lar, JSON doğrulama
-│     ├─ heuristic.py         # anahtarsız deterministik danışman (analiz + öneri)
-│     ├─ openai_compatible.py # OpenAI/Groq/Mistral/DeepSeek/Ollama...
-│     ├─ gemini.py            # Google Gemini (gemini-3.5-flash-lite)
-│     ├─ anthropic.py         # Anthropic Claude
-│     ├─ factory.py           # sağlayıcı seçimi + fallback
-│     └─ provider_info.py     # /ai-providers karşılaştırması
-├─ ui/
-│  └─ app.py                   # Streamlit arayüzü: harita + çiftçi akışı + uzman modu
-├─ tests/                      # 64 test, dış servisler mock
-├─ run.py                      # sadece backend
-├─ run_ui.py                   # backend + arayüz (tek komut)
-├─ requirements.txt            # backend bağımlılıkları
-├─ requirements-ui.txt         # arayüz bağımlılıkları (streamlit, folium, streamlit-folium)
+│     ├─ heuristic.py         # anahtarsız deterministik danışman
+│     ├─ openai_compatible.py # OpenAI/Groq/Mistral/DeepSeek/Ollama
+│     ├─ gemini.py
+│     ├─ anthropic.py
+│     ├─ factory.py
+│     └─ provider_info.py
+├─ web/                       # çiftçi PWA'sı (derleme adımı yok)
+│  ├─ index.html
+│  ├─ styles.css
+│  ├─ app.js
+│  ├─ sw.js                   # uygulama kabuğu önbelleği; API'yi asla önbelleklemez
+│  ├─ manifest.webmanifest
+│  └─ icons/
+├─ ui/app.py                  # Streamlit uzman/test arayüzü
+├─ tests/                     # dış servisler mock
+├─ scripts/build.sh           # doğrula + test + dist paketi
+├─ Dockerfile
+├─ docker-compose.yml
+├─ render.yaml                # Render blueprint
+├─ Procfile
+├─ Makefile
+├─ .github/workflows/ci.yml   # test + Docker build + health smoke
+├─ run.py
+├─ requirements.txt
+├─ requirements-ui.txt
 ├─ .env.example
 ├─ README.md
-└─ RAPOR.md                    # ayrıntılı değerlendirme ve eksikler
+└─ RAPOR.md
 ```
 
 ---
 
-## 7. Sınırlamalar
+## 9. Dağıtım
 
-- NASA POWER **tahmin değil**, geçmişe dönük klimatolojidir. Son 30 gün verisi de gecikmeli olabilir.
-- Toprak besinleri, pH ve organik madde NASA'dan gelmez; çiftçi/laboratuvar verisi gerekir.
-- İklim değişikliği projeksiyonu (CMIP6/NEX-GDDP) henüz yok; mevcut sürüm tarihsel baseline kullanır.
-- Pazar fiyatı, yerel çeşit, hastalık/zararlı modeli ve sulama programı yoktur.
-- **Serbest metin sıralamayı değiştirmez.** Kural motoru yalnızca yapılandırılmış alanları (konum, sulama, toprak, hedef, ay) kullanır. Serbest metin yalnızca AI açıklamasına ve eksik bilgi sorularına girer; bu yüzden çiftçi "sulama yok" yazıp formda "tam sulama" seçerse form kazanır.
-- Harita tıklaması ~1,2 km yarıçaplı bir nokta seçer; parsel sınırı (polygon) çizimi ve alan hesabı yoktur. Alanı çiftçi dönüm olarak girer.
-- Tarayıcı konumu `localhost` veya HTTPS gerektirir; bazı mobil tarayıcılar izin vermez. Bu durumda harita elle kullanılır.
-- Nominatim saniyede 1 istek sınırı koyar; sonuçlar 24 saat önbelleğe alınır. Yoğun kullanımda kendi Nominatim sunucunuz veya ücretli bir harita servisi gerekir.
-- Kimlik doğrulama, veritabanı, rate limit ve kalıcı geçmiş yoktur (üretim öncesi eklenmeli).
-- AI çıktısı doğrulanmamış olabilir; agronomist onayı ve toprak analizi şarttır.
+### Render (Blueprint)
 
-Ayrıntılı risk listesi, AI sağlayıcı karşılaştırması ve yol haritası: **[RAPOR.md](RAPOR.md)**.
+1. Render'da **New → Blueprint** seçip bu depoyu bağla.
+2. `render.yaml` Docker servisini, `/health` kontrolünü ve ortam değişkenlerini tanımlar.
+3. Ücretsiz plan soğuk başlangıç yapabilir; ilk istek 30-60 saniye sürebilir.
+
+### Docker / VPS
+
+```bash
+docker build -t tarla-dostu .
+docker run -p 8000:8000 -e AI_PROVIDER=heuristic tarla-dostu
+```
+
+Ters proxy (nginx/Caddy) arkasında `--proxy-headers` kullanılır. Konum izni ve service worker **HTTPS** (veya `localhost`) gerektirir.
+
+### Ortam değişkenleri
+
+| Değişken | Varsayılan | Açıklama |
+|---|---|---|
+| `PORT` | `8000` | Dinlenecek port |
+| `ENVIRONMENT` | `development` | `production` önerilir |
+| `AI_PROVIDER` | `heuristic` | `gemini`, `openai`, `anthropic`, `groq`, `ollama`… |
+| `AI_API_KEY` | — | AI anahtarı (opsiyonel) |
+| `GEOCODING_ENABLED` | `true` | Nominatim ters kodlama |
+| `CORS_ORIGINS` | `*` | Virgülle ayrılmış izinli kaynaklar |
+| `NASA_POWER_*` | makul varsayılanlar | Zaman aşımı, cache, retry |
+| `UI_BASE_URL` | `/app/` | `/geo` dönüş adresi |
 
 ---
 
-## 8. Lisans / atıf
+## 10. Sınırlamalar
 
-- NASA POWER verileri NASA tarafından açık olarak sunulur; kullanım ve atıf koşulları için <https://power.larc.nasa.gov/> kontrol edilmelidir.
-- Ekin parametreleri ve puanlama ağırlıkları bu proje için derlenmiş **yaklaşık** değerlerdir; ticari kullanımdan önce yerel uzmanlarla kalibre edilmelidir.
+- NASA POWER **tahmin değil**, geçmişe dönük klimatolojidir. Son 30 gün verisi gecikmeli olabilir.
+- İklim eğilimi son ~25 yılın doğrusal yönüdür; CMIP6/NEX-GDDP senaryo projeksiyonu **değildir**.
+- Toprak besinleri, pH ve organik madde NASA'dan gelmez; çiftçi/laboratuvar verisi gerekir.
+- Pazar fiyatı, yerel çeşit, hastalık/zararlı modeli ve sulama programı yoktur.
+- **Serbest metin sıralamayı değiştirmez.** Kural motoru yapılandırılmış alanları kullanır; serbest metin yalnızca açıklamaya girer.
+- Harita tıklaması nokta seçer; parsel sınırı (polygon) ve otomatik alan hesabı yoktur. Alanı çiftçi dönüm olarak girer.
+- Tarayıcı konumu ve service worker `localhost` veya HTTPS gerektirir.
+- Nominatim saniyede 1 istek sınırı koyar; sonuçlar 24 saat önbelleğe alınır. Yoğun kullanımda kendi sunucunuz gerekir.
+- Kimlik doğrulama, veritabanı, rate limit ve kalıcı kullanıcı geçmişi yoktur (plan yalnızca tarayıcıda saklanır).
+- AI çıktısı doğrulanmamış olabilir; agronomist onayı ve toprak analizi şarttır.
+
+Ayrıntılı risk listesi ve yol haritası: **[RAPOR.md](RAPOR.md)**.
+
+---
+
+## 11. Lisans / atıf
+
+- NASA POWER verileri NASA tarafından açık olarak sunulur; kullanım ve atıf koşulları için <https://power.larc.nasa.gov/>.
+- Harita: © OpenStreetMap katkıcıları; karolar OpenStreetMap Foundation tarafından sunulur.
+- Ürün parametreleri ve puanlama ağırlıkları bu proje için derlenmiş **yaklaşık** değerlerdir; ticari kullanımdan önce yerel uzmanlarla kalibre edilmelidir.
 - Bu yazılım hiçbir verim, gelir veya kâr garantisi vermez.

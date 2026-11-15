@@ -331,8 +331,13 @@ class AdviceRequest(BaseModel):
     soil_texture: SoilTexture = SoilTexture.UNKNOWN
     soil_ph: float | None = Field(None, ge=3.5, le=10.0)
     organic_matter_pct: float | None = Field(None, ge=0, le=30)
+    salinity_ds_m: float | None = Field(None, ge=0, le=40)
+    drainage: Drainage = Drainage.MEDIUM
+    slope_pct: float | None = Field(None, ge=0, le=80)
+    previous_crop: str | None = Field(None, max_length=80, description="Geçen sezon ekilen ürün (TR/EN adı)")
     irrigation: Irrigation = Irrigation.RAINFED
     water_availability: WaterAvailability = WaterAvailability.MEDIUM
+    market_access: MarketAccess = MarketAccess.MEDIUM
     goal: Goal = Goal.MAX_PROFIT
     planting_month: int | None = Field(None, ge=1, le=12)
     free_text: str = Field("", max_length=2000, description="Çiftçinin kendi cümleleriyle anlattıkları")
@@ -441,6 +446,11 @@ class CropInfo(BaseModel):
     planting_window: str
     nitrogen_need: str
     notes: str
+    icon: str = "🌱"
+    family: str = ""
+    family_label: str = ""
+    rotation_role: str = ""
+    rotation_benefit: str = ""
 
 
 class AIProviderInfo(BaseModel):
@@ -480,3 +490,216 @@ class ApiInfo(BaseModel):
     openapi_url: str
     endpoints: dict[str, str]
     example_request: dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Multi-year rotation, soil health, water and climate outlook
+# ---------------------------------------------------------------------------
+class FarmPlanRequest(AdviceRequest):
+    """Farmer request for the complete plan (advice + rotation + soil + water)."""
+
+    rotation_years: int = Field(3, ge=2, le=4, description="2, 3 veya 4 yıllık ekim nöbeti")
+    start_crop: str | None = Field(
+        None,
+        max_length=80,
+        description="Rotasyonun ilk yılı için isteğe bağlı ürün anahtarı/adı",
+    )
+
+    model_config = ConfigDict(
+        validate_assignment=True,
+        json_schema_extra={
+            "example": {
+                "location": {"latitude": 41.6771, "longitude": 26.5557, "region_name": "Edirne"},
+                "area_hectares": 2.0,
+                "soil_texture": "clay_loam",
+                "soil_ph": 7.0,
+                "organic_matter_pct": 2.2,
+                "previous_crop": "wheat",
+                "irrigation": "limited",
+                "water_availability": "medium",
+                "goal": "soil_health",
+                "planting_month": 10,
+                "free_text": "Toprağım yoruldu, bu yıl ne eksem iyi olur?",
+                "rotation_years": 3,
+                "top_n": 3,
+                "language": "tr",
+            }
+        },
+    )
+
+
+class RotationYearInfo(BaseModel):
+    year: int
+    crop_key: str
+    crop_name: str
+    crop_name_local: str
+    category: str
+    icon: str
+    family: str
+    family_label: str
+    rule_score: float
+    planting_window: str
+    growing_days: int
+    water_need_mm: int
+    season_rain_mm: float | None = None
+    role: str
+    benefit: str
+    actions: list[str] = Field(default_factory=list)
+    cover_crop: str | None = None
+    note: str | None = None
+
+
+class RotationScores(BaseModel):
+    overall: float = Field(..., ge=0, le=100)
+    soil_health: float = Field(..., ge=0, le=100)
+    water: float = Field(..., ge=0, le=100)
+    resilience: float = Field(..., ge=0, le=100)
+    profit: float = Field(..., ge=0, le=100)
+    risk: float = Field(..., ge=0, le=100)
+    label: str = ""
+
+
+class RotationAlternative(BaseModel):
+    crops: list[str]
+    crop_names: list[str]
+    scores: RotationScores
+    total_water_mm: float
+    irrigation_need_mm: float
+
+
+class RotationPlan(BaseModel):
+    applicable: bool
+    years_requested: int
+    headline: str
+    summary: str
+    scores: RotationScores | None = None
+    years: list[RotationYearInfo] = Field(default_factory=list)
+    total_water_mm: float = 0
+    season_rain_mm: float = 0
+    irrigation_need_mm: float = 0
+    benefits: list[str] = Field(default_factory=list)
+    cautions: list[str] = Field(default_factory=list)
+    alternatives: list[RotationAlternative] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class SoilIndicatorInfo(BaseModel):
+    key: str
+    label: str
+    value: float | None = None
+    unit: str = ""
+    score: float | None = Field(None, ge=0, le=100)
+    status: str
+    advice: str
+
+
+class SoilHealthSection(BaseModel):
+    score: float | None = Field(None, ge=0, le=100)
+    label: str
+    grade: str
+    summary: str
+    indicators: list[SoilIndicatorInfo] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    data_gaps: list[str] = Field(default_factory=list)
+    outlook: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class MonthlyWaterInfo(BaseModel):
+    month: str
+    rain_mm: float | None = None
+    et0_mm: float | None = None
+    balance_mm: float | None = None
+    status: str
+
+
+class WaterSection(BaseModel):
+    summary: str
+    label: str
+    annual_rain_mm: float | None = None
+    annual_et0_mm: float | None = None
+    crop_need_mm: float
+    season_rain_mm: float | None = None
+    irrigation_supply_mm: float
+    deficit_mm: float
+    deficit_m3: float
+    deficit_ton_per_decare: float
+    area_decare: float
+    months: list[MonthlyWaterInfo] = Field(default_factory=list)
+    drought_months: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class ClimateTrendInfo(BaseModel):
+    key: str
+    label: str
+    direction: Literal["up", "down", "stable"]
+    change: float
+    per_decade: float
+    unit: str
+    message: str
+
+
+class ClimateSection(BaseModel):
+    available: bool
+    start_year: int | None = None
+    end_year: int | None = None
+    available_years: int = 0
+    baseline_temp_c: float | None = None
+    recent_temp_c: float | None = None
+    baseline_precip_mm: float | None = None
+    recent_precip_mm: float | None = None
+    risk_level: str = "unknown"
+    risk_label: str = "Bilinmiyor"
+    trends: list[ClimateTrendInfo] = Field(default_factory=list)
+    messages: list[str] = Field(default_factory=list)
+    dry_months: list[str] = Field(default_factory=list)
+    warmest_year: int | None = None
+    driest_year: int | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class FarmPlanResponse(BaseModel):
+    plan_id: str
+    generated_at: datetime
+    language: Language
+    location: Location
+    environment: EnvironmentSnapshot
+    recommendations: list[CropRecommendation]
+    advice: AdvicePlan
+    rotation: RotationPlan
+    soil_health: SoilHealthSection
+    water: WaterSection
+    climate: ClimateSection
+    summary: str
+    warnings: list[str] = Field(default_factory=list)
+    data_sources: list[DataSource] = Field(default_factory=list)
+    ai: AIMetadata
+    disclaimer: str
+
+
+class RotationResponse(BaseModel):
+    generated_at: datetime
+    location: Location
+    environment: EnvironmentSnapshot
+    rotation: RotationPlan
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SoilHealthResponse(BaseModel):
+    generated_at: datetime
+    location: Location
+    environment: EnvironmentSnapshot
+    soil_health: SoilHealthSection
+    rotation: RotationPlan | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class WaterPlanResponse(BaseModel):
+    generated_at: datetime
+    location: Location
+    environment: EnvironmentSnapshot
+    water: WaterSection
+    rotation: RotationPlan | None = None
+    warnings: list[str] = Field(default_factory=list)

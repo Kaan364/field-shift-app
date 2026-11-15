@@ -126,6 +126,10 @@ class AdviceService:
                 soil_texture=payload.soil_texture,
                 soil_ph=payload.soil_ph,
                 organic_matter_pct=payload.organic_matter_pct,
+                salinity_ds_m=payload.salinity_ds_m,
+                drainage=payload.drainage,
+                slope_pct=payload.slope_pct,
+                previous_crop=payload.previous_crop,
             ),
             resources=Resources(
                 irrigation=payload.irrigation,
@@ -134,6 +138,7 @@ class AdviceService:
             preferences=Preferences(
                 goal=payload.goal,
                 planting_month=planting_month,
+                market_access=payload.market_access,
             ),
             top_n=payload.top_n,
             language=payload.language,

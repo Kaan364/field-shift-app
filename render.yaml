@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tarla-dostu
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: AI_PROVIDER
+        value: heuristic
+      - key: GEOCODING_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: LOG_LEVEL
+        value: INFO
+      # Optional: add an AI key in the Render dashboard to switch AI_PROVIDER
+      # to gemini/openai/anthropic. The app works without one.

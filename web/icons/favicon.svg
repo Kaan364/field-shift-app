@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tarla Dostu">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2e8b4f"/>
+      <stop offset="1" stop-color="#14472a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <path d="M32 51V27" stroke="#e9f5e5" stroke-width="4" stroke-linecap="round"/>
+  <path d="M32 34c0-7-6-12-13-12 0 7 6 12 13 12z" fill="#9ed36a"/>
+  <path d="M32 27c0-7 6-12 13-12 0 7-6 12-13 12z" fill="#c8eb92"/>
+  <path d="M18 51h28" stroke="#e9f5e5" stroke-width="4" stroke-linecap="round"/>
+</svg>

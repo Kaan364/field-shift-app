@@ -75,6 +75,61 @@ async def test_daily_request_builds_expected_date_window():
     assert query["end"] == ["20261114"]
 
 
+async def test_annual_is_aggregated_from_the_monthly_endpoint():
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        parameters = {"T2M": {}, "PRECTOTCORR": {}}
+        for year, temp in ((2024, 10.0), (2025, 11.0)):
+            for month in range(1, 13):
+                key = f"{year}{month:02d}"
+                parameters["T2M"][key] = temp
+                parameters["PRECTOTCORR"][key] = 2.0
+        payload = {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [32.85, 39.93, 1128.1]},
+            "properties": {"parameter": parameters},
+            "header": {"fill_value": -999.0, "title": "POWER Monthly"},
+        }
+        return httpx.Response(200, json=payload)
+
+    client = _client(handler)
+    result = await client.get_annual(39.93, 32.85, start_year=2024, end_year=2025)
+    await client.aclose()
+
+    query = parse_qs(urlparse(str(calls[0].url)).query)
+    assert query["start"] == ["2024"]
+    assert query["end"] == ["2025"]
+    assert "/monthly/point" in str(calls[0].url)
+
+    assert result.start == "2024"
+    assert result.end == "2025"
+    assert result.parameters["T2M"] == {"2024": 10.0, "2025": 11.0}
+    # 2 mm/day scaled by the real month lengths, including the 2024 leap day.
+    assert result.parameters["PRECTOTCORR"]["2024"] == pytest.approx(732.0)
+    assert result.parameters["PRECTOTCORR"]["2025"] == pytest.approx(730.0)
+
+
+def test_partial_years_are_dropped_from_the_annual_series():
+    from app.clients.nasa_power import NASAResult, aggregate_monthly_to_annual
+
+    result = NASAResult(
+        latitude=39.93,
+        longitude=32.85,
+        elevation_m=None,
+        parameters={
+            "T2M": {"202401": 5.0, "202402": 6.0},
+            "PRECTOTCORR": {f"2024{month:02d}": 1.0 for month in range(1, 13)},
+        },
+    )
+    annual = aggregate_monthly_to_annual(result)
+
+    assert "T2M" not in annual.parameters  # only two months -> incomplete
+    assert annual.parameters["PRECTOTCORR"]["2024"] == pytest.approx(366.0)
+    assert annual.start == annual.end == "2024"
+
+
 async def test_transient_errors_are_retried_then_succeed():
     payload = climatology_payload()
     state = {"count": 0}

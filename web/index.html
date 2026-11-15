@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tarla Dostu — NASA verisiyle ekim planı</title>
+  <meta name="description" content="Tarlan için hava, toprak ve suya uygun 3 yıllık ekim planı. NASA POWER verisiyle çalışan, telefonda kullanımı kolay çiftçi karar destek aracı.">
+  <meta name="theme-color" content="#1f6b3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Tarla Dostu">
+  <link rel="manifest" href="/app/manifest.webmanifest">
+  <link rel="icon" href="/app/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/app/icons/icon-192.png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">İçeriğe geç</a>
+
+  <noscript>
+    <div class="banner banner-warn">
+      Bu uygulama için tarayıcında JavaScript açık olmalı. Tarayıcı ayarlarından JavaScript'i açıp sayfayı yenile.
+    </div>
+  </noscript>
+
+  <header class="topbar">
+    <a class="brand" href="/app/" aria-label="Tarla Dostu ana sayfa">
+      <span class="brand-mark" aria-hidden="true">🌱</span>
+      <span class="brand-text">
+        <strong>Tarla Dostu</strong>
+        <small>NASA verisiyle ekim planı</small>
+      </span>
+    </a>
+    <div class="top-actions">
+      <button class="icon-btn" id="textToggle" type="button" aria-label="Yazıyı büyüt" title="Yazıyı büyüt">A+</button>
+      <button class="icon-btn" id="helpBtn" type="button" aria-label="Nasıl çalışır?" title="Nasıl çalışır?">?</button>
+    </div>
+  </header>
+
+  <div id="offlineBanner" class="banner banner-warn" hidden>
+    İnternet yok gibi görünüyor. Son planını gösterebilirim; yeni plan için bağlantı gerekir.
+  </div>
+
+  <main id="main" tabindex="-1">
+
+    <!-- ================================================================
+         1) HOME
+         ================================================================ -->
+    <section class="screen is-active" id="screen-home" aria-labelledby="homeTitle">
+      <div class="hero-home">
+        <p class="eyebrow">NASA Space Apps • Çiftçi karar desteği</p>
+        <h1 id="homeTitle">Tarlan için<br><span class="accent">doğru ekimi</span> bul.</h1>
+        <p class="lead">3 kısa soru. NASA'dan hava verisi. Toprağına ve suyuna uygun 3 yıllık ekim planı.</p>
+        <div class="hero-badges" aria-hidden="true">
+          <span>🌦️ Hava</span><span>🪨 Toprak</span><span>💧 Su</span><span>🔁 Ekim nöbeti</span>
+        </div>
+      </div>
+
+      <div class="home-actions">
+        <button class="btn btn-primary btn-xl" id="startBtn" type="button">
+          Başla <span aria-hidden="true">→</span>
+        </button>
+        <button class="btn btn-ghost btn-lg" id="lastPlanBtn" type="button" hidden>
+          📋 Son planımı aç
+        </button>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true">🌦️</span>
+          <h2>Hava değişiyor</h2>
+          <p>Son 25 yılın sıcaklık ve yağış eğilimini gösterir.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true">🪨</span>
+          <h2>Toprak yorulmasın</h2>
+          <p>Baklagil, anız ve farklı köklerle toprağı besleyen sıra kurar.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true">💧</span>
+          <h2>Su boşa gitmesin</h2>
+          <p>Yağışı ve sulama imkânını hesaba katar; ton cinsinden su gösterir.</p>
+        </article>
+      </div>
+
+      <div class="trust-box">
+        <p><strong>Veri nereden geliyor?</strong> NASA POWER iklim ve toprak nemi verisi + senin verdiğin toprak bilgileri. Bu bir karar destek aracıdır; verim garantisi vermez.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         2) WIZARD
+         ================================================================ -->
+    <section class="screen" id="screen-wizard" aria-labelledby="stepTitle">
+      <div class="wizard-head">
+        <button class="icon-btn back" id="backBtn" type="button" aria-label="Geri">←</button>
+        <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+        <span class="step-label" id="stepLabel">1 / 3</span>
+      </div>
+
+      <!-- Step 1: location -->
+      <div class="step is-active" data-step="1">
+        <h2 id="stepTitle">Tarlan nerede?</h2>
+        <p class="muted">Haritaya dokun, konumunu kullan veya il seç. Bu kadar.</p>
+
+        <div class="map-shell">
+          <div id="map" aria-label="Tarla seçme haritası"></div>
+          <div class="map-hint" id="mapHint">Haritaya dokunarak tarlanı işaretle</div>
+        </div>
+
+        <div class="stack">
+          <button class="btn btn-secondary btn-lg" id="geoBtn" type="button">
+            📍 Konumumu bul
+          </button>
+          <p class="form-msg" id="geoMsg" role="status"></p>
+
+          <label class="field-label" for="citySelect">Veya il seç</label>
+          <select id="citySelect" class="input select">
+            <option value="">İl seç…</option>
+          </select>
+
+          <p class="place-line" id="placeName" role="status">Henüz yer seçilmedi.</p>
+
+          <details class="advanced">
+            <summary>Enlem / boylamı elle girmek istiyorum</summary>
+            <div class="grid-2">
+              <label class="field-label" for="latInput">Enlem
+                <input class="input" id="latInput" type="number" step="0.0001" min="-90" max="90" inputmode="decimal" placeholder="örn. 39.93">
+              </label>
+              <label class="field-label" for="lonInput">Boylam
+                <input class="input" id="lonInput" type="number" step="0.0001" min="-180" max="180" inputmode="decimal" placeholder="örn. 32.85">
+              </label>
+            </div>
+            <button class="btn btn-ghost" id="applyCoords" type="button">Bu noktayı kullan</button>
+          </details>
+        </div>
+      </div>
+
+      <!-- Step 2: field + water -->
+      <div class="step" data-step="2">
+        <h2>Tarlan ve suyun</h2>
+        <p class="muted">Yaklaşık bilgi yeterli. Bilmiyorsan boş bırak.</p>
+
+        <label class="field-label" for="areaInput">Tarlan kaç dönüm?</label>
+        <div class="stepper" role="group" aria-label="Tarla büyüklüğü">
+          <button class="step-btn" type="button" data-delta="-5" aria-label="5 dönüm azalt">−5</button>
+          <input class="input area-input" id="areaInput" type="number" inputmode="decimal" min="1" max="100000" step="1" value="10" aria-describedby="areaHint">
+          <button class="step-btn" type="button" data-delta="5" aria-label="5 dönüm artır">+5</button>
+        </div>
+        <p class="hint" id="areaHint">1 dönüm ≈ 1.000 m². Bilmiyorsan 10 bırak.</p>
+
+        <fieldset class="fieldset">
+          <legend>Sulayabiliyor musun?</legend>
+          <div class="choice-stack" id="irrigationChoices">
+            <label class="choice">
+              <input type="radio" name="irrigation" value="rainfed" checked>
+              <span class="choice-icon" aria-hidden="true">🌧️</span>
+              <span class="choice-body"><strong>Sadece yağmur</strong><small>Sulama yapamam.</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="irrigation" value="limited">
+              <span class="choice-icon" aria-hidden="true">💧</span>
+              <span class="choice-body"><strong>Bazen / kısmen</strong><small>Suyum sınırlı, kritik anda veririm.</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="irrigation" value="full">
+              <span class="choice-icon" aria-hidden="true">🚿</span>
+              <span class="choice-body"><strong>Evet, tam sulayabilirim</strong><small>Sezon boyunca suyum var.</small></span>
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="field-label" for="prevCrop">Geçen yıl tarlaya ne ektin?</label>
+        <select id="prevCrop" class="input select">
+          <option value="">Bilmiyorum / ilk kez ekiyorum</option>
+        </select>
+        <p class="hint">Aynı ürünü üst üste ekince hastalık artar. Bu yüzden soruyoruz.</p>
+
+        <details class="advanced">
+          <summary>Toprak bilgim var (isteğe bağlı)</summary>
+          <p class="hint">Bilmiyorsan hiç dokunma. Toprak analizi varsa değerleri gir.</p>
+
+          <label class="field-label" for="textureSelect">Toprak nasıl?</label>
+          <select id="textureSelect" class="input select">
+            <option value="unknown">Bilmiyorum</option>
+            <option value="sandy_loam">Kumlu — elime alınca dağılır</option>
+            <option value="loam">Tınlı — ufalanır, ideal</option>
+            <option value="clay_loam">Killi tın — biraz yapışır</option>
+            <option value="clay">Kil — çok yapışır, ağır</option>
+            <option value="silt_loam">Siltli tın — un gibi, kaygan</option>
+          </select>
+
+          <div class="grid-2">
+            <label class="field-label" for="phInput">pH
+              <input class="input" id="phInput" type="number" min="3.5" max="10" step="0.1" inputmode="decimal" placeholder="örn. 7.2">
+            </label>
+            <label class="field-label" for="omInput">Organik madde (%)
+              <input class="input" id="omInput" type="number" min="0" max="30" step="0.1" inputmode="decimal" placeholder="örn. 2.0">
+            </label>
+            <label class="field-label" for="salinityInput">Tuzluluk (EC)
+              <input class="input" id="salinityInput" type="number" min="0" max="40" step="0.1" inputmode="decimal" placeholder="dS/m">
+            </label>
+            <label class="field-label" for="slopeInput">Eğim (%)
+              <input class="input" id="slopeInput" type="number" min="0" max="80" step="1" inputmode="numeric" placeholder="örn. 3">
+            </label>
+          </div>
+
+          <label class="field-label" for="drainageSelect">Su birikiyor mu?</label>
+          <select id="drainageSelect" class="input select">
+            <option value="medium">Bazen</option>
+            <option value="good">Hayır, iyi akıyor</option>
+            <option value="poor">Evet, su birikiyor</option>
+          </select>
+        </details>
+      </div>
+
+      <!-- Step 3: goal + extra -->
+      <div class="step" data-step="3">
+        <h2>Senin için en önemlisi ne?</h2>
+        <p class="muted">Bir tanesini seç. Plan buna göre kurulur.</p>
+
+        <fieldset class="fieldset">
+          <legend class="sr-only">Hedefin</legend>
+          <div class="goal-grid" id="goalChoices">
+            <label class="goal">
+              <input type="radio" name="goal" value="max_profit" checked>
+              <span class="goal-icon" aria-hidden="true">💰</span>
+              <strong>Daha çok kazanmak</strong>
+            </label>
+            <label class="goal">
+              <input type="radio" name="goal" value="soil_health">
+              <span class="goal-icon" aria-hidden="true">🌱</span>
+              <strong>Toprağı iyileştirmek</strong>
+            </label>
+            <label class="goal">
+              <input type="radio" name="goal" value="low_water">
+              <span class="goal-icon" aria-hidden="true">💧</span>
+              <strong>Az su kullanmak</strong>
+            </label>
+            <label class="goal">
+              <input type="radio" name="goal" value="low_input">
+              <span class="goal-icon" aria-hidden="true">💵</span>
+              <strong>Az masraf yapmak</strong>
+            </label>
+            <label class="goal">
+              <input type="radio" name="goal" value="max_yield">
+              <span class="goal-icon" aria-hidden="true">🌾</span>
+              <strong>Daha çok ürün almak</strong>
+            </label>
+            <label class="goal">
+              <input type="radio" name="goal" value="risk_averse">
+              <span class="goal-icon" aria-hidden="true">🛡️</span>
+              <strong>Garanti olsun</strong>
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="field-label" for="monthSelect">Ne zaman ekmeyi düşünüyorsun?</label>
+        <select id="monthSelect" class="input select">
+          <option value="">Bilmiyorum</option>
+        </select>
+
+        <label class="field-label" for="yearsSelect">Kaç yıllık plan?</label>
+        <select id="yearsSelect" class="input select">
+          <option value="3" selected>3 yıllık (önerilen)</option>
+          <option value="2">2 yıllık</option>
+          <option value="4">4 yıllık</option>
+        </select>
+
+        <label class="field-label" for="freeText">Anlatmak istediğin bir şey var mı?</label>
+        <textarea id="freeText" class="input textarea" rows="4" maxlength="2000"
+                  placeholder="Örnek: Tarlam yoruldu, suyum az. Ne eksem iyi olur?"></textarea>
+        <div class="chips">
+          <button class="chip" type="button" data-example="Tarlam yoruldu. Bu yıl ne eksem iyi olur?">Tarlam yoruldu</button>
+          <button class="chip" type="button" data-example="Suyum çok az. Az su isteyen bir ürün olsun.">Suyum az</button>
+          <button class="chip" type="button" data-example="Geçen yıl buğday ektim. Bu yıl ne ekmeliyim?">Geçen yıl buğday</button>
+        </div>
+
+        <div class="form-msg error" id="formMsg" role="alert" hidden></div>
+
+        <button class="btn btn-primary btn-xl" id="submitBtn" type="button">
+          🌾 Planımı göster
+        </button>
+        <p class="hint center">Yaklaşık 10-20 saniye sürebilir.</p>
+      </div>
+
+      <div class="wizard-nav" id="wizardNav">
+        <button class="btn btn-primary btn-lg" id="nextBtn" type="button">Devam →</button>
+        <p class="hint center" id="wizardHint">Adım 1 / 3</p>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         3) LOADING
+         ================================================================ -->
+    <section class="screen" id="screen-loading" aria-live="polite" aria-busy="true">
+      <div class="loading-wrap">
+        <div class="spinner" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h2 id="loadingTitle">Planın hazırlanıyor…</h2>
+        <p class="muted" id="loadingMsg">NASA'dan hava verisi alınıyor…</p>
+        <div class="loading-track"><span></span></div>
+        <p class="hint">Tarlana göre 21 ürün, 3 yıllık sıra, toprak ve su hesabı yapılıyor.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         4) RESULT
+         ================================================================ -->
+    <section class="screen" id="screen-result" aria-labelledby="resultTitle">
+      <div class="result-top">
+        <p class="place-badge" id="resultPlace">📍 Tarlan</p>
+        <p class="climate-badge" id="resultClimate">🌦️ İklim</p>
+      </div>
+
+      <article class="card card-hero">
+        <p class="eyebrow">Bu yıl için en iyi seçim</p>
+        <div class="crop-hero">
+          <span class="crop-emoji" id="heroIcon" aria-hidden="true">🌾</span>
+          <div>
+            <h1 id="heroCrop">Yükleniyor…</h1>
+            <p class="rating" id="heroRating">Uygunluk hesaplanıyor…</p>
+          </div>
+        </div>
+        <p class="hero-why" id="heroWhy"></p>
+        <div class="hero-actions">
+          <button class="btn btn-soft" id="listenBtn" type="button">🔊 Dinle</button>
+          <button class="btn btn-soft" id="printBtn" type="button">🖨️ Yazdır</button>
+          <button class="btn btn-soft" id="shareBtn" type="button">📤 Paylaş</button>
+        </div>
+      </article>
+
+      <section class="card card-rotation" aria-labelledby="rotationTitle">
+        <div class="card-head">
+          <h2 id="rotationTitle">🔁 <span id="rotationYearsLabel">3</span> yıllık ekim planı</h2>
+          <span class="pill" id="rotationScorePill">—</span>
+        </div>
+        <p class="muted" id="rotationSummary"></p>
+        <div class="timeline" id="rotationTimeline"></div>
+        <div class="benefit-box" id="rotationBenefits"></div>
+        <details class="advanced">
+          <summary>Bu sıra neden iyi? Nelere dikkat et?</summary>
+          <ul class="ticks" id="rotationWhy"></ul>
+          <p class="hint" id="rotationNotes"></p>
+          <div id="rotationAlternatives"></div>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="scoreTitle">
+        <h2 id="scoreTitle">📊 Planın karnesi</h2>
+        <div class="score-grid" id="scoreGrid"></div>
+        <p class="hint">Puanlar 100 üzerindendir; yaklaşık bir modeldir.</p>
+      </section>
+
+      <section class="card" aria-labelledby="soilTitle">
+        <div class="card-head">
+          <h2 id="soilTitle">🪨 Toprağın karnesi</h2>
+          <span class="grade" id="soilGrade" aria-label="Toprak notu">—</span>
+        </div>
+        <p id="soilSummary"></p>
+        <div class="meter" role="img" aria-label="Toprak sağlığı puanı"><span id="soilBar"></span></div>
+        <p class="meter-caption"><span id="soilScoreText">—</span> / 100</p>
+        <h3 class="subhead">İlk yapman gerekenler</h3>
+        <ul class="ticks" id="soilActions"></ul>
+        <p class="outlook" id="soilOutlook"></p>
+        <details class="advanced">
+          <summary>Toprak detayları</summary>
+          <div class="indicator-list" id="soilIndicators"></div>
+          <p class="hint" id="soilGaps"></p>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="waterTitle">
+        <h2 id="waterTitle">💧 Su karnesi</h2>
+        <p id="waterSummary"></p>
+        <div class="water-stats" id="waterStats"></div>
+        <div class="month-bars" id="waterMonths" aria-label="Aylık yağış ve su ihtiyacı"></div>
+        <div class="legend"><span class="dot rain"></span> Yağış <span class="dot sun"></span> Buharlaşma</div>
+        <ul class="ticks" id="waterTips"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="climateTitle">
+        <div class="card-head">
+          <h2 id="climateTitle">🌡️ Hava değişiyor</h2>
+          <span class="pill" id="climateRisk">—</span>
+        </div>
+        <div class="trend-grid" id="climateTrends"></div>
+        <ul class="ticks" id="climateMessages"></ul>
+        <p class="chips-line" id="climateDry"></p>
+        <p class="source" id="climateSource"></p>
+      </section>
+
+      <section class="card" aria-labelledby="stepsTitle">
+        <h2 id="stepsTitle">✅ İlk yapman gerekenler</h2>
+        <p class="hint">Kutuyu işaretle; telefonun hatırlar.</p>
+        <ul class="checklist" id="firstSteps"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="growTitle">
+        <h2 id="growTitle">🌱 Nasıl yetiştiririm?</h2>
+        <details class="accordion" open>
+          <summary>Toprağı hazırla ve ek</summary>
+          <ul id="growList"></ul>
+        </details>
+        <details class="accordion">
+          <summary>Gübre ve besin</summary>
+          <ul id="feedList"></ul>
+        </details>
+        <details class="accordion">
+          <summary>Sezon boyunca bakım</summary>
+          <ul id="careList"></ul>
+        </details>
+        <details class="accordion">
+          <summary>Dikkat etmen gerekenler</summary>
+          <ul id="riskList"></ul>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="altTitle">
+        <h2 id="altTitle">🌾 Başka seçenekler</h2>
+        <div class="alt-grid" id="alternatives"></div>
+      </section>
+
+      <section class="card card-tech">
+        <details>
+          <summary>Teknik detaylar ve veri kaynakları</summary>
+          <div id="techDetails"></div>
+          <p class="hint" id="techWarnings"></p>
+        </details>
+        <p class="disclaimer" id="disclaimer"></p>
+      </section>
+
+      <div class="result-actions">
+        <button class="btn btn-primary btn-lg" id="newPlanBtn" type="button">Yeni plan</button>
+        <button class="btn btn-ghost" id="downloadBtn" type="button">JSON indir</button>
+        <button class="btn btn-ghost" id="printBtn2" type="button">Yazdır</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p><strong>Tarla Dostu</strong> — NASA Space Apps Challenge için geliştirilmiş açık kaynak karar destek aracı.</p>
+    <p>Veri: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a> • Harita: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> • <a href="/docs" target="_blank" rel="noopener">API</a></p>
+  </footer>
+
+  <dialog id="helpDialog" class="dialog">
+    <form method="dialog">
+      <h2>Nasıl çalışır?</h2>
+      <ol class="help-steps">
+        <li><strong>Yerini seç.</strong> Haritaya dokun veya konumunu kullan.</li>
+        <li><strong>3 soruya cevap ver.</strong> Tarla büyüklüğü, sulama ve hedefin.</li>
+        <li><strong>Planını oku.</strong> Bu yıl ne ek, sonraki yıllar ne ek, toprak ve su ne durumda.</li>
+      </ol>
+      <p class="hint">NASA POWER verisi bölge ortalamasıdır, tarlanın tamamını göstermez. Ekimden önce toprak analizi yaptır ve yerel tarım uzmanına danış.</p>
+      <button class="btn btn-primary" value="close">Anladım</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/app/app.js"></script>
+</body>
+</html>
