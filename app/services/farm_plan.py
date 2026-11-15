@@ -15,6 +15,8 @@ from uuid import uuid4
 from app.clients.nasa_power import NASAPowerClient
 from app.config import Settings
 from app.domain.crops import CROP_CATALOG, resolve_crop
+from app.domain.economics import build_economics
+from app.domain.frost import assess_risk
 from app.domain.rotation import RotationOption, RotationResult, build_rotation, score_label
 from app.domain.scoring import evaluate_candidates
 from app.domain.soil_health import SoilHealthReport, assess_soil_health
@@ -23,9 +25,11 @@ from app.schemas import (
     ClimateSection,
     ClimateTrendInfo,
     DataSource,
+    EconomicsResponse,
     EnvironmentSnapshot,
     FarmPlanRequest,
     FarmPlanResponse,
+    FrostRiskResponse,
     MonthlyWaterInfo,
     RotationAlternative,
     RotationPlan,
@@ -39,8 +43,10 @@ from app.schemas import (
     WaterSection,
 )
 from app.services.advice import AdviceService
+from app.services.agronomy import irrigation_supply_mm, season_metrics
 from app.services.climate import ClimateOutlook, build_climate_outlook
 from app.services.recommendation import RecommendationService
+from app.services.sections import economics_payload, risk_payload
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +108,7 @@ def _rotation_plan(result: RotationResult) -> RotationPlan:
         alternatives.append(
             RotationAlternative(
                 crops=[year.crop.key for year in option.years],
-                crop_names=[year.crop.local_name for year in option.years],
+                crop_names=[year.crop.name for year in option.years],
                 scores=_rotation_scores(option),
                 total_water_mm=option.total_water_mm,
                 irrigation_need_mm=option.irrigation_need_mm,
@@ -294,19 +300,19 @@ class FarmPlanService:
     def _extra_sources(self) -> list[DataSource]:
         return [
             DataSource(
-                name="Ekim nöbeti motoru",
+                name="Rotation engine",
                 url=None,
                 description=(
-                    "Baklagil payı, familya çeşitliliği, anız örtüsü, kök derinliği, su dengesi "
-                    "ve iklim dayanıklılığını puanlayan açıklanabilir rotasyon modeli."
+                    "Explainable rotation model scoring legume share, family diversity, residue "
+                    "cover, rooting depth, water balance and climate resilience."
                 ),
             ),
             DataSource(
-                name="Toprak sağlığı karnesi",
+                name="Soil health report card",
                 url=None,
                 description=(
-                    "Çiftçi/laboratuvar toprak verileri + NASA POWER toprak nemi ve sıcaklığı "
-                    "ile hesaplanan yaklaşık toprak sağlığı puanı."
+                    "Approximate soil-health score built from farmer/lab soil values plus "
+                    "NASA POWER soil moisture and temperature."
                 ),
             ),
             DataSource(
@@ -315,7 +321,23 @@ class FarmPlanService:
                     f"{self.settings.nasa_power_base_url}/annual/point"
                     "?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,GWETROOT&community=AG&format=JSON"
                 ),
-                description="Uzun dönem sıcaklık/yağış eğilimi (tahmin değil, geçmiş veri yönü).",
+                description="Long-term temperature/rainfall direction (historical data, not a forecast).",
+            ),
+            DataSource(
+                name="Farm budget model",
+                url=None,
+                description=(
+                    "Transparent per-hectare yield, price and cost assumptions in USD; "
+                    "planning figures, not market quotes."
+                ),
+            ),
+            DataSource(
+                name="Climate risk model",
+                url=None,
+                description=(
+                    "Frost, heat and drought indicators derived from 25-year monthly normals "
+                    "and crop tolerance values."
+                ),
             ),
         ]
 
@@ -360,6 +382,62 @@ class FarmPlanService:
             warnings=warnings,
         )
 
+    async def economics(self, payload: FarmPlanRequest) -> EconomicsResponse:
+        analyze_request, environment, evaluations, warnings = await self._prepare(payload)
+        rotation = self._rotation(payload, analyze_request, environment, evaluations)
+        crops = self._water_crops(rotation, evaluations[: payload.top_n])
+        water = self._water(payload, analyze_request, environment, rotation, evaluations[: payload.top_n])
+        per_crop_deficit = water.deficit_mm / max(1, len(crops))
+        economics = build_economics(
+            environment,
+            analyze_request.field,
+            analyze_request.resources,
+            crops,
+            area_hectares=analyze_request.field.area_hectares,
+            water_deficit_mm=per_crop_deficit,
+        )
+        risk = assess_risk(
+            environment,
+            crop=crops[0] if crops else None,
+            water_deficit_mm=per_crop_deficit,
+            irrigation=analyze_request.resources.irrigation,
+        )
+        return EconomicsResponse(
+            generated_at=datetime.now(timezone.utc),
+            location=payload.location,
+            environment=environment,
+            economics=economics_payload(economics),
+            risk=risk_payload(risk),
+            warnings=warnings,
+        )
+
+    async def frost_risk(self, payload: FarmPlanRequest) -> FrostRiskResponse:
+        analyze_request, environment, evaluations, warnings = await self._prepare(payload)
+        crop = resolve_crop(payload.start_crop) if payload.start_crop else None
+        if crop is None and evaluations:
+            crop = evaluations[0].crop
+        deficit = 0.0
+        if crop is not None:
+            season = season_metrics(environment, crop, payload.planting_month)
+            deficit = max(
+                0.0,
+                float(crop.water_need_mm)
+                - ((season.total_precip_mm or 0.0) + irrigation_supply_mm(analyze_request.resources)),
+            )
+        risk = assess_risk(
+            environment,
+            crop=crop,
+            water_deficit_mm=deficit,
+            irrigation=analyze_request.resources.irrigation,
+        )
+        return FrostRiskResponse(
+            generated_at=datetime.now(timezone.utc),
+            location=payload.location,
+            environment=environment,
+            risk=risk_payload(risk),
+            warnings=warnings,
+        )
+
     # ------------------------------------------------------------------
     # Complete plan
     # ------------------------------------------------------------------
@@ -372,21 +450,47 @@ class FarmPlanService:
         water = self._water(payload, analyze_request, advice.environment, rotation, advice.recommendations)
         climate = await self._climate(payload, advice.environment)
 
+        plan_crops = self._water_crops(rotation, advice.recommendations)
+        per_crop_deficit = water.deficit_mm / max(1, len(plan_crops))
+        economics = build_economics(
+            advice.environment,
+            analyze_request.field,
+            analyze_request.resources,
+            plan_crops,
+            area_hectares=analyze_request.field.area_hectares,
+            water_deficit_mm=per_crop_deficit,
+        )
+        risk_crop = plan_crops[0] if plan_crops else None
+        risk = assess_risk(
+            advice.environment,
+            crop=risk_crop,
+            water_deficit_mm=per_crop_deficit,
+            irrigation=analyze_request.resources.irrigation,
+        )
+
         warnings = list(advice.warnings) + scoring_warnings
 
         if not rotation.applicable:
             warnings.append(rotation.summary)
         if soil_report.score is not None and soil_report.score < 45:
             warnings.append(
-                "Toprak sağlığı düşük çıktı. Ekim öncesi toprak analizi ve organik madde planı öncelikli."
+                "Soil health scored low. Plan a soil test and an organic-matter strategy before planting."
             )
         if water.deficit_mm > 100 and payload.irrigation == "rainfed":
             warnings.append(
-                "Sulama yok ve su açığı yüksek. Kuraklığa dayanıklı ürün/çeşit seçmeden ekim yapma."
+                "There is no irrigation and the water deficit is high. Choose a drought-tolerant crop before planting."
             )
         if not climate.available:
             warnings.append(
-                "Uzun yıllık iklim eğilimi alınamadı; iklim kartı yalnızca güncel bölge ortalamasını gösteriyor."
+                "The long-term climate trend could not be loaded; the climate card shows only the current regional average."
+            )
+        if economics.total_gross_margin_usd < 0:
+            warnings.append(
+                "The estimated budget is negative at these assumptions. Check costs and the sale price before planting."
+            )
+        if risk.overall_level == "high":
+            warnings.append(
+                "Weather risk is high for the leading crop. Read the frost, heat and drought actions before sowing."
             )
 
         sources = list(advice.data_sources) + self._extra_sources()
@@ -403,6 +507,8 @@ class FarmPlanService:
             soil_health=_soil_section(soil_report),
             water=_water_section(water),
             climate=_climate_section(climate),
+            economics=economics_payload(economics),
+            risk=risk_payload(risk),
             summary=advice.summary,
             warnings=_dedupe(warnings),
             data_sources=sources,

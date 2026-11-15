@@ -18,15 +18,15 @@ from dataclasses import dataclass
 
 from app.domain.crops import CROP_CATALOG
 
-FAMILY_LABELS_TR = {
-    "cereal": "Tahıl",
-    "legume": "Baklagil",
-    "oilseed": "Yağ bitkisi",
-    "root": "Kök bitkisi",
-    "vegetable": "Sebze",
-    "fiber": "Lif bitkisi",
-    "forage": "Yem bitkisi",
-    "perennial": "Çok yıllık",
+FAMILY_LABELS_EN = {
+    "cereal": "Cereal",
+    "legume": "Legume",
+    "oilseed": "Oilseed",
+    "root": "Root crop",
+    "vegetable": "Vegetable",
+    "fiber": "Fibre crop",
+    "forage": "Forage",
+    "perennial": "Perennial",
 }
 
 
@@ -52,7 +52,7 @@ class RotationTraits:
 
     @property
     def family_label(self) -> str:
-        return FAMILY_LABELS_TR.get(self.family, self.family)
+        return FAMILY_LABELS_EN.get(self.family, self.family)
 
 
 _CEREAL = dict(family="cereal", residue_cover=0.72, rooting="medium", break_crop=0.35)
@@ -86,26 +86,26 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
     "wheat": _t(
         _CEREAL,
         icon="🌾",
-        role="Ana tahıl",
-        benefit="Sap ve anız bırakır; toprağı örter ve gelir getirir.",
+        role="Main cereal",
+        benefit="Leaves straw and residue; covers the soil and brings income.",
     ),
     "barley": _t(
         _CEREAL,
         icon="🌾",
-        role="Dayanıklı tahıl",
-        benefit="Kurağa ve tuzluluğa dayanıklıdır; hayvan yemi olarak da satılır.",
+        role="Tough cereal",
+        benefit="Tolerates drought and salinity; also sells as animal feed.",
     ),
     "triticale": _t(
         _CEREAL,
         icon="🌾",
-        role="Kışlık tahıl",
-        benefit="Kışa çok dayanıklıdır; zayıf topraklarda bile tutunur.",
+        role="Winter cereal",
+        benefit="Very winter-hardy; grows even on weaker soils.",
     ),
     "oats": _t(
         _CEREAL,
         icon="🌾",
-        role="Yemlik tahıl",
-        benefit="Serin havayı sever; yeşil gübre karışımlarında kullanılır.",
+        role="Feed cereal",
+        benefit="Likes cool weather; used in green-manure mixes.",
     ),
     "maize": RotationTraits(
         family="cereal",
@@ -113,80 +113,80 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         residue_cover=0.8,
         rooting="deep",
         break_crop=0.4,
-        role="Yüksek verimli tahıl",
-        benefit="Verimi yüksektir ama su ve azot isteği fazladır.",
+        role="High-yield cereal",
+        benefit="High yield, but needs a lot of water and nitrogen.",
     ),
     "sunflower": _t(
         _OILSEED,
         icon="🌻",
         pollinator=True,
-        role="Yağlık gelir ürünü",
-        benefit="Derin kökleri toprağı kullanır; arı ve böcekleri çeker.",
+        role="Oilseed cash crop",
+        benefit="Deep roots use the soil well; attracts bees and beneficial insects.",
     ),
     "canola": _t(
         _OILSEED,
         icon="🌼",
         pollinator=True,
         break_crop=0.65,
-        role="Kışlık yağ bitkisi",
-        benefit="Hastalık döngüsünü kırar; arılar için erken çiçek sağlar.",
+        role="Winter oilseed",
+        benefit="Breaks disease cycles; gives bees early flowers.",
     ),
     "safflower": _t(
         _OILSEED,
         icon="🌺",
         break_crop=0.6,
-        role="Kuraklığa dayanıklı yağ bitkisi",
-        benefit="Suyu az olan tarlada bile yağ üretir.",
+        role="Drought-tolerant oilseed",
+        benefit="Produces oil even on a field with little water.",
     ),
     "chickpea": _t(
         _LEGUME,
         icon="🫘",
-        role="Toprağı besleyen baklagil",
-        benefit="Havadan azot bağlar; azot gübresi ihtiyacını azaltır.",
+        role="Soil-building legume",
+        benefit="Fixes nitrogen from the air; reduces nitrogen fertiliser need.",
     ),
     "lentil": _t(
         _LEGUME,
         icon="🫘",
-        role="Kurak baklagil",
-        benefit="Az suyla yetişir, toprağa azot kazandırır.",
+        role="Dryland legume",
+        benefit="Grows with little water and adds nitrogen to the soil.",
     ),
     "soybean": _t(
         _LEGUME,
         icon="🫘",
-        role="Yağlık baklagil",
-        benefit="Azot bağlar ve iyi bir gelir ürünüdür; suyu sever.",
+        role="Oilseed legume",
+        benefit="Fixes nitrogen and is a good cash crop; likes water.",
     ),
     "alfalfa": _t(
         _FORAGE,
         icon="🌿",
         multi_year=True,
-        role="Çok yıllık yem bitkisi",
-        benefit="Kökleri toprağı derin besler; 2-3 yıl tarlada kalabilir.",
+        role="Perennial forage",
+        benefit="Deep roots feed the soil; can stay in the field for 2-3 years.",
     ),
     "sainfoin": _t(
         _FORAGE,
         icon="🌿",
         multi_year=True,
-        role="Kurak yem bitkisi",
-        benefit="Kurağa dayanıklı baklagil; toprağı azotla zenginleştirir.",
+        role="Dryland forage",
+        benefit="Drought-tolerant legume; enriches the soil with nitrogen.",
     ),
     "vetch": _t(
         _FORAGE,
         icon="🌱",
-        role="Yeşil gübre",
-        benefit="Toprağa azot bağlar; çiçekteyken toprağa karıştırılır.",
+        role="Green manure",
+        benefit="Fixes nitrogen; incorporated into the soil at flowering.",
     ),
     "potato": _t(
         _ROOT,
         icon="🥔",
-        role="Yüksek gelirli kök bitkisi",
-        benefit="Toprağı havalandırır; iyi gelir getirir ama suyu sever.",
+        role="High-value root crop",
+        benefit="Aerates the soil; good income but needs water.",
     ),
     "sugar_beet": _t(
         _ROOT,
         icon="🍬",
-        role="Sözleşmeli gelir ürünü",
-        benefit="Derin kökü toprağı açar; kontratlı üretim gerektirir.",
+        role="Contract cash crop",
+        benefit="Deep roots open the soil; needs a production contract.",
     ),
     "tomato": RotationTraits(
         family="vegetable",
@@ -194,8 +194,8 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         residue_cover=0.2,
         rooting="medium",
         break_crop=0.65,
-        role="Yüksek gelirli sebze",
-        benefit="İyi gelir getirir; su, gübre ve işçilik isteği yüksektir.",
+        role="High-value vegetable",
+        benefit="Good income; needs a lot of water, fertiliser and labour.",
     ),
     "cotton": RotationTraits(
         family="fiber",
@@ -203,8 +203,8 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         residue_cover=0.35,
         rooting="deep",
         break_crop=0.55,
-        role="Sıcak iklim gelir ürünü",
-        benefit="Uzun sezon ister; sulama olmadan ekonomik değildir.",
+        role="Warm-climate cash crop",
+        benefit="Needs a long season; not economic without irrigation.",
     ),
     "olive": RotationTraits(
         family="perennial",
@@ -213,8 +213,8 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         rooting="deep",
         multi_year=True,
         break_crop=0.8,
-        role="Çok yıllık bahçe",
-        benefit="Uzun vadeli yatırımdır; yıllık ekim nöbetine girmez.",
+        role="Perennial orchard",
+        benefit="A long-term investment; not part of a yearly rotation.",
     ),
     "grape": RotationTraits(
         family="perennial",
@@ -223,8 +223,8 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         rooting="deep",
         multi_year=True,
         break_crop=0.8,
-        role="Çok yıllık bağ",
-        benefit="Uzun vadeli yatırımdır; yıllık ekim nöbetine girmez.",
+        role="Perennial vineyard",
+        benefit="A long-term investment; not part of a yearly rotation.",
     ),
     "apple": RotationTraits(
         family="perennial",
@@ -233,12 +233,12 @@ ROTATION_TRAITS: dict[str, RotationTraits] = {
         rooting="deep",
         multi_year=True,
         break_crop=0.8,
-        role="Çok yıllık meyve bahçesi",
-        benefit="Uzun vadeli yatırımdır; yıllık ekim nöbetine girmez.",
+        role="Perennial fruit orchard",
+        benefit="A long-term investment; not part of a yearly rotation.",
     ),
 }
 
-DEFAULT_TRAITS = RotationTraits(family="other", icon="🌱", role="Ürün", benefit="")
+DEFAULT_TRAITS = RotationTraits(family="other", icon="🌱", role="Crop", benefit="")
 
 
 def traits_for(crop_key: str) -> RotationTraits:

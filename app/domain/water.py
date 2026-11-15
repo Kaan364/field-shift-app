@@ -57,12 +57,12 @@ class WaterPlan:
 
 def _status(rain: float | None, et0: float | None) -> str:
     if rain is None or et0 is None:
-        return "bilinmiyor"
+        return "unknown"
     if rain < et0 * 0.45:
-        return "kurak"
+        return "dry"
     if rain < et0 * 0.85:
-        return "kuru"
-    return "yeterli"
+        return "low"
+    return "enough"
 
 
 def _tips(
@@ -73,25 +73,25 @@ def _tips(
 ) -> list[str]:
     tips: list[str] = []
     if resources.irrigation == Irrigation.RAINFED:
-        tips.append("Sulama yok: kuraklığa dayanıklı çeşit seç ve ekimi toprak nemi yeterliyken yap.")
-        tips.append("Anızı bırak ve malç kullan; toprak nemini korur.")
+        tips.append("No irrigation: choose a drought-tolerant variety and sow when the soil has enough moisture.")
+        tips.append("Leave residue and use mulch; it keeps moisture in the soil.")
     elif resources.irrigation == Irrigation.LIMITED:
-        tips.append("Suyu en kritik dönemlere ayır: çiçeklenme ve tane/dane dolumu.")
-        tips.append("Damla sulama veya gece sulaması ile suyu verimli kullan.")
-        tips.append("Toprağı çok sürmekten kaçın; nem buharlaşmasın.")
+        tips.append("Save water for the critical stages: flowering and grain/fruit filling.")
+        tips.append("Use drip or night irrigation to use water efficiently.")
+        tips.append("Avoid deep tillage; it lets moisture escape.")
     else:
-        tips.append("Toprak nemini ölç; ihtiyaçtan fazla sulama kök çürüklüğü ve tuzluluk yapar.")
-        tips.append("Sulamayı sabah erken veya akşam yap; buharlaşma kaybını azalt.")
-        tips.append("Yağmurdan sonra sulamayı geciktir; yağışı hesaba kat.")
+        tips.append("Measure soil moisture; over-irrigation causes root rot and salinity.")
+        tips.append("Irrigate early in the morning or in the evening to cut evaporation.")
+        tips.append("Delay irrigation after rain; count the rainfall you received.")
     if field.drainage == Drainage.POOR:
-        tips.append("Drenajı iyileştir; su biriken yerde kök çürür ve tuz birikir.")
+        tips.append("Improve drainage; waterlogged soil rots roots and builds up salt.")
     if field.organic_matter_pct is not None and field.organic_matter_pct < 2.0:
-        tips.append("Organik madde az; gübre/kompost ile toprağın su tutma kapasitesini artır.")
+        tips.append("Organic matter is low; add manure/compost to raise the soil's water-holding capacity.")
     if deficit_mm > 50:
-        tips.append("Yağmur suyunu hasat etmek için küçük bir gölet veya depo düşün.")
+        tips.append("Consider a small pond or tank to harvest rainwater.")
     if drought_months:
-        tips.append("En kurak aylar: " + ", ".join(drought_months[:4]) + ". Sulama planını bu aylara göre yap.")
-    tips.append("Sulama suyunun tuzluluğunu kontrol et; tuzlu su toprağı bozar.")
+        tips.append("Driest months: " + ", ".join(drought_months[:4]) + ". Plan irrigation around them.")
+    tips.append("Check the salinity of your irrigation water; salty water damages the soil.")
     return tips[:6]
 
 
@@ -129,7 +129,7 @@ def build_water_plan(
             # Month length is approximately encoded in the rainfall field; use 30 days.
             et0 = round(item.evapotranspiration_mm_per_day * 30.0, 1)
         status = _status(rain, et0)
-        if status == "kurak":
+        if status == "dry":
             drought_months.append(item.month)
         months.append(
             MonthlyWaterRow(
@@ -142,35 +142,35 @@ def build_water_plan(
         )
 
     if need <= 0:
-        label = "hesaplanamadı"
-        summary = "Su ihtiyacı hesaplanamadı."
+        label = "not calculated"
+        summary = "The water need could not be calculated."
     elif deficit <= 10:
-        label = "su yeterli"
+        label = "water is enough"
         summary = (
-            f"Bu planın toplam su ihtiyacı yaklaşık {need:.0f} mm. "
-            f"Yağış ve sulama imkânı bunu karşılıyor görünüyor."
+            f"The plan needs about {need:.0f} mm of water in total. "
+            f"Rainfall and the irrigation you reported appear to cover it."
         )
     elif deficit <= 60:
-        label = "az sulama gerek"
+        label = "a little irrigation needed"
         summary = (
-            f"Toplam ihtiyaç yaklaşık {need:.0f} mm; yağış {season_rain_mm or 0:.0f} mm. "
-            f"Yaklaşık {deficit:.0f} mm ek sulama gerekebilir."
+            f"Total need is about {need:.0f} mm; rainfall is {season_rain_mm or 0:.0f} mm. "
+            f"You may need about {deficit:.0f} mm of extra irrigation."
         )
     else:
-        label = "sulama şart"
+        label = "irrigation is essential"
         summary = (
-            f"Toplam ihtiyaç yaklaşık {need:.0f} mm; yağış {season_rain_mm or 0:.0f} mm. "
-            f"Yaklaşık {deficit:.0f} mm ek sulama gerekir."
+            f"Total need is about {need:.0f} mm; rainfall is {season_rain_mm or 0:.0f} mm. "
+            f"You need about {deficit:.0f} mm of extra irrigation."
         )
 
-    deficit_m3 = deficit * area_decare  # mm × dekar = m³
+    deficit_m3 = deficit * area_decare  # mm × decare = m³
     tips = _tips(resources, field, deficit, drought_months)
 
     notes = [
-        "1 mm su, 1 dönümde 1 ton (1 m³) su demektir.",
-        "Yağış verisi NASA POWER 25 yıllık iklim ortalamasıdır; bu yılın gerçek yağışı farklı olabilir.",
-        "Bitki su ihtiyacı katalogdaki yaklaşık sezonluk değerdir; çeşit ve toprağa göre değişir.",
-        "Sulama suyu kalitesi ve tuzluluk ayrıca kontrol edilmelidir.",
+        "1 mm of water over 1 decare is 1 tonne (1 m³) of water.",
+        "Rainfall is the NASA POWER 25-year climate average; this year's rain can be different.",
+        "The crop water need is an approximate seasonal catalogue value; variety and soil change it.",
+        "Check irrigation-water quality and salinity separately.",
     ]
 
     return WaterPlan(

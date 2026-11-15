@@ -19,6 +19,8 @@ from app.ai.base import AdviceContext, build_ai_context
 from app.ai.heuristic import HeuristicProvider
 from app.clients.nasa_power import NASAPowerClient
 from app.config import Settings
+from app.domain.economics import build_economics
+from app.domain.frost import assess_risk
 from app.domain.scoring import CropEvaluation
 from app.schemas import (
     AIMetadata,
@@ -34,12 +36,14 @@ from app.schemas import (
     Resources,
     ScoreBreakdown,
 )
+from app.services.agronomy import irrigation_supply_mm, season_metrics
 from app.services.recommendation import (
     DISCLAIMER_EN,
     DISCLAIMER_TR,
     AnalysisError,
     RecommendationService,
 )
+from app.services.sections import economics_payload, risk_payload
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +66,32 @@ class AdviceService:
         environment, evaluations, warnings, _has_daily = await self.recommender.prepare(request)
         if not evaluations:
             raise AnalysisError(
-                "Bu konum ve tercihlerle değerlendirilebilecek bitki bulunamadı.",
+                "No crop could be evaluated for this location and preferences.",
                 status_code=422,
                 code="no_candidates",
             )
+
+        top_crop = evaluations[0].crop
+        season = season_metrics(environment, top_crop, payload.planting_month)
+        water_deficit = max(
+            0.0,
+            float(top_crop.water_need_mm)
+            - ((season.total_precip_mm or 0.0) + irrigation_supply_mm(request.resources)),
+        )
+        economics = build_economics(
+            environment,
+            request.field,
+            request.resources,
+            [top_crop],
+            area_hectares=request.field.area_hectares,
+            water_deficit_mm=water_deficit,
+        )
+        risk = assess_risk(
+            environment,
+            crop=top_crop,
+            water_deficit_mm=water_deficit,
+            irrigation=request.resources.irrigation,
+        )
 
         analyze_context = build_ai_context(
             request,
@@ -88,6 +114,26 @@ class AdviceService:
             candidates=analyze_context.candidates[:candidate_limit],
             free_text=payload.free_text.strip(),
             data_quality=environment.notes,
+            economics={
+                "headline": economics.headline,
+                "summary": economics.summary,
+                "gross_margin_usd": economics.total_gross_margin_usd,
+                "margin_per_decare_usd": economics.margin_per_decare_usd,
+                "total_cost_usd": economics.total_cost_usd,
+                "break_even_price_usd_per_t": economics.break_even_price_usd_per_t,
+                "low_profit_usd": economics.low_profit_usd,
+                "high_profit_usd": economics.high_profit_usd,
+            },
+            risk={
+                "overall": risk.overall_label,
+                "summary": risk.summary,
+                "frost": risk.frost.risk_label,
+                "heat": risk.heat.risk_label,
+                "drought": risk.drought.risk_label,
+                "last_frost_month": risk.frost.last_frost_month,
+                "first_frost_month": risk.frost.first_frost_month,
+                "actions": risk.actions,
+            },
         )
 
         plan, ai_meta = await self._run_ai(advice_context, warnings)
@@ -95,8 +141,8 @@ class AdviceService:
 
         if ai_meta.kind == "llm" and ai_meta.used and not ai_meta.fallback_used:
             warnings.append(
-                "Açıklama yapay zekâ tarafından yazıldı; sıralama kural motorundan gelir. "
-                "İlaç/gübre dozu gibi kritik kararlar için uzmana danışın."
+                "The explanation was written by AI; the ranking comes from the rule engine. "
+                "Ask an expert before critical decisions such as pesticide or fertiliser doses."
             )
 
         summary = plan.headline or recommendations[0].rationale
@@ -109,6 +155,8 @@ class AdviceService:
             environment=environment,
             recommendations=recommendations,
             advice=plan,
+            economics=economics_payload(economics),
+            risk=risk_payload(risk),
             summary=summary,
             warnings=self._dedupe(warnings),
             ai=ai_meta,
@@ -162,11 +210,7 @@ class AdviceService:
             meta.used = True
             meta.kind = "deterministic"
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
-            meta.notes = (
-                "Açıklama deterministik kural motoruyla üretildi."
-                if context.language == "tr"
-                else "Explanation generated deterministically by the rule engine."
-            )
+            meta.notes = "Explanation generated deterministically by the rule engine."
             if provider.reason:
                 meta.notes = f"{meta.notes} {provider.reason}"
             return plan, meta
@@ -177,10 +221,10 @@ class AdviceService:
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
             return plan, meta
         except Exception as exc:  # noqa: BLE001 - provider failures are isolated
-            logger.warning("AI serbest metin önerisi başarısız oldu: %s", exc)
+            logger.warning("AI free-text advice failed: %s", exc)
             if not self.settings.ai_fallback_to_heuristic:
                 raise AnalysisError(
-                    f"AI sağlayıcısı yanıt veremedi: {exc}",
+                    f"The AI provider did not respond: {exc}",
                     status_code=503,
                     code="ai_unavailable",
                 ) from exc
@@ -190,13 +234,9 @@ class AdviceService:
             meta.fallback_used = True
             meta.error = str(exc)[:500]
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
-            meta.notes = (
-                "LLM çağrısı başarısız oldu; deterministik açıklama kullanıldı."
-                if context.language == "tr"
-                else "LLM call failed; deterministic explanation used."
-            )
+            meta.notes = "The AI call failed; the deterministic explanation was used."
             warnings.append(
-                "Yapay zekâya ulaşılamadı; açıklamalar deterministik kural motorundan üretildi."
+                "The AI service could not be reached; explanations come from the deterministic rule engine."
             )
             return plan, meta
 

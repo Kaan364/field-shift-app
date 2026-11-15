@@ -38,10 +38,10 @@ class AnalysisError(RuntimeError):
 
 
 DISCLAIMER_TR = (
-    "Bu çıktı bir karar destek aracıdır; verim, gelir veya kâr garantisi değildir. "
-    "NASA POWER verileri grid tabanlı ve geçmişe dönük ortalamalardır, tarla ölçeğinde değildir. "
-    "Ekim, gübreleme, ilaçlama ve sulama kararlarından önce toprak analizi yaptırın ve "
-    "yetkili bir tarım uzmanına / il-ilçe tarım müdürlüğüne danışın."
+    "This output is decision support, not a guarantee of yield, income or profit. "
+    "NASA POWER data is gridded and climatological, not field-scale. "
+    "Before planting, fertilising, spraying or irrigating, obtain a soil test and consult "
+    "a qualified agronomist or the local extension service."
 )
 
 DISCLAIMER_EN = (
@@ -74,7 +74,7 @@ class RecommendationService:
                 location.latitude, location.longitude, days=recent_days
             )
         except NASAAPIError as exc:
-            warnings.append(f"Son günlük hava verisi alınamadı: {exc}")
+            warnings.append(f"Recent daily weather could not be loaded: {exc}")
 
         environment, _ = build_environment(
             climatology, daily, field, recent_days=recent_days
@@ -89,10 +89,10 @@ class RecommendationService:
     async def prepare(
         self, request: AnalyzeRequest
     ) -> tuple[EnvironmentSnapshot, list[CropEvaluation], list[str], bool]:
-        """NASA verisini çeker, ortamı ve kural motoru adaylarını hazırlar.
+        """Fetch NASA data and prepare the environment and rule-engine candidates.
 
-        Hem ``analyze`` hem de serbest metinli öneri akışı bu adımı paylaşır.
-        Dönen dörtlü: (ortam, adaylar, uyarılar, günlük veri alındı mı).
+        Both ``analyze`` and the free-text advice flow share this step.
+        Returns (environment, candidates, warnings, daily data available).
         """
 
         warnings: list[str] = []
@@ -106,7 +106,7 @@ class RecommendationService:
             )
         except NASAAPIError as exc:
             warnings.append(
-                f"Son 30 günlük hava verisi alınamadı; analiz iklim ortalamalarıyla yapıldı ({exc})."
+                f"Recent 30-day weather could not be loaded; the analysis uses climate averages ({exc})."
             )
 
         environment, _ = build_environment(climatology, daily, request.field, recent_days=30)
@@ -118,7 +118,7 @@ class RecommendationService:
         environment, evaluations, warnings, has_daily = await self.prepare(request)
         if not evaluations:
             raise AnalysisError(
-                "Seçilen filtrelerle değerlendirilebilecek ekin kalmadı. Hariç listesini veya sezon süresi sınırını gevşetin.",
+                "No crop is left to evaluate with these filters. Relax the exclusion list or the season-length limit.",
                 status_code=422,
                 code="no_candidates",
             )
@@ -140,8 +140,8 @@ class RecommendationService:
         used_ai = ai_meta.kind == "llm" and ai_meta.used and not ai_meta.fallback_used
         if used_ai:
             warnings.append(
-                "AI tarafından üretilen gerekçe ve aksiyonlar doğrulanmamış olabilir; "
-                "saha kararından önce agronomist kontrolü yapın."
+                "AI-generated rationale and actions may be unverified; "
+                "have an agronomist review before a field decision."
             )
 
         summary = (ai_result.summary or heuristic_result.summary).strip()
@@ -189,11 +189,7 @@ class RecommendationService:
             meta.used = True
             meta.kind = "deterministic"
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
-            meta.notes = (
-                "Deterministik kural motoru kullanıldı."
-                if context.language == "tr"
-                else "Deterministic rule engine was used."
-            )
+            meta.notes = "Deterministic rule engine was used."
             if provider.reason:
                 meta.notes = f"{meta.notes} {provider.reason}"
             return result, meta
@@ -204,10 +200,10 @@ class RecommendationService:
             meta.latency_ms = int((time.perf_counter() - started) * 1000)
             return result, meta
         except Exception as exc:  # noqa: BLE001 - we deliberately isolate provider failures
-            logger.warning("AI sağlayıcısı başarısız oldu: %s", exc)
+            logger.warning("AI provider failed: %s", exc)
             if not self.settings.ai_fallback_to_heuristic:
                 raise AnalysisError(
-                    f"AI sağlayıcısı yanıt veremedi: {exc}",
+                    f"The AI provider did not respond: {exc}",
                     status_code=503,
                     code="ai_unavailable",
                 ) from exc
@@ -316,13 +312,6 @@ class RecommendationService:
 
     @staticmethod
     def _fallback_rationale(evaluation: CropEvaluation, language: Language) -> str:
-        if language == Language.TR:
-            parts = [f"{evaluation.crop.local_name} kural motorunda {evaluation.rule_score}/100 aldı."]
-            if evaluation.strengths:
-                parts.append("Güçlü yönler: " + "; ".join(evaluation.strengths[:3]) + ".")
-            if evaluation.limiting_factors:
-                parts.append("Sınırlar: " + "; ".join(evaluation.limiting_factors[:3]) + ".")
-            return " ".join(parts)
         parts = [f"{evaluation.crop.name} scored {evaluation.rule_score}/100 in the rule engine."]
         if evaluation.strengths:
             parts.append("Strengths: " + "; ".join(evaluation.strengths[:3]) + ".")
@@ -362,12 +351,12 @@ class RecommendationService:
             DataSource(
                 name="NASA POWER - Climatology",
                 url=climatology_url,
-                description="25 yıllık (2001-2025) aylık iklim ve toprak nemi/sıcaklığı ortalamaları.",
+                description="25-year (2001-2025) monthly climate and soil-moisture/temperature averages.",
             ),
             DataSource(
-                name="Çiftçi girdileri",
+                name="Farmer inputs",
                 url=None,
-                description="Tarla profili, kaynaklar ve tercihler; doğrulanmamış beyan niteliğindedir.",
+                description="Field profile, resources and preferences; self-reported and unverified.",
             ),
         ]
         if has_daily:
@@ -380,26 +369,26 @@ class RecommendationService:
                 DataSource(
                     name="NASA POWER - Daily (recent)",
                     url=daily_url,
-                    description="Son 30 günün günlük sıcaklık, yağış ve toprak nemi verileri.",
+                    description="Daily temperature, rainfall and soil moisture for the last 30 days.",
                 )
             )
         if ai_meta.kind == "llm":
             sources.append(
                 DataSource(
-                    name=f"AI sağlayıcı: {ai_meta.provider}",
+                    name=f"AI provider: {ai_meta.provider}",
                     url=None,
                     description=(
-                        f"Model: {ai_meta.model or 'belirtilmedi'}. AI çıktısı doğrulanmamıştır; "
-                        "agronomist kontrolü gerekir."
+                        f"Model: {ai_meta.model or 'not specified'}. AI output is unverified; "
+                        "agronomist review is required."
                     ),
                 )
             )
         else:
             sources.append(
                 DataSource(
-                    name="Deterministik agronomi motoru",
+                    name="Deterministic agronomy engine",
                     url=None,
-                    description="Açıklanabilir kural tabanlı puanlama; harici AI çağrısı yapılmadı.",
+                    description="Explainable rule-based scoring; no external AI call was made.",
                 )
             )
         return sources

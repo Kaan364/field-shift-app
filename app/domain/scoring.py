@@ -38,18 +38,21 @@ COMPONENT_WEIGHTS: dict[str, float] = {
     "rotation": 0.05,
 }
 
-COMPONENT_LABELS_TR = {
-    "temperature": "Sıcaklık",
-    "water": "Su dengesi",
-    "ph": "Toprak pH'ı",
-    "texture": "Toprak dokusu",
-    "salinity": "Tuzluluk",
-    "climate_risk": "İklim riski",
-    "goal_fit": "Hedefe uygunluk",
-    "market": "Pazar",
-    "calendar": "Ekim takvimi",
-    "rotation": "Ekim nöbeti",
+COMPONENT_LABELS_EN = {
+    "temperature": "Temperature",
+    "water": "Water balance",
+    "ph": "Soil pH",
+    "texture": "Soil texture",
+    "salinity": "Salinity",
+    "climate_risk": "Climate risk",
+    "goal_fit": "Goal fit",
+    "market": "Market",
+    "calendar": "Sowing calendar",
+    "rotation": "Rotation",
 }
+
+# Backwards-compatible alias.
+COMPONENT_LABELS_TR = COMPONENT_LABELS_EN
 
 TEXTURE_ORDER = ["light", "light_medium", "medium", "medium_heavy", "heavy"]
 
@@ -241,56 +244,56 @@ def _build_messages(
     for key, score in components.items():
         if score is None:
             continue
-        label = COMPONENT_LABELS_TR[key]
+        label = COMPONENT_LABELS_EN[key]
         if key == "temperature" and score >= 80:
-            strengths.append(f"Sıcaklık uygun ({season.mean_temp_c}°C)")
+            strengths.append(f"Temperature is suitable ({season.mean_temp_c}°C)")
         elif key == "water" and score >= 80:
             strengths.append(
-                f"Su dengesi uygun (sezon yağışı {season.total_precip_mm} mm, oran {water_ratio})"
+                f"Water balance is suitable (season rainfall {season.total_precip_mm} mm, ratio {water_ratio})"
             )
         elif key == "ph" and score >= 80:
-            strengths.append("Toprak pH'ı uygun")
+            strengths.append("Soil pH is suitable")
         elif key == "texture" and score >= 80:
-            strengths.append("Toprak dokusu uygun")
+            strengths.append("Soil texture is suitable")
         elif key == "salinity" and score >= 80:
-            strengths.append("Tuzluluk riski düşük")
+            strengths.append("Salinity risk is low")
         elif key == "market" and score >= 80:
-            strengths.append("Pazar talebi güçlü")
+            strengths.append("Market demand is strong")
         elif key == "goal_fit" and score >= 80:
-            strengths.append("Çiftçinin hedefiyle güçlü uyum")
+            strengths.append("Strong fit with the farmer's goal")
         elif key == "rotation" and score >= 80:
-            strengths.append("Ekim nöbeti uygun (önceki ürüne göre hastalık/azot dengesi iyi)")
+            strengths.append("Rotation is suitable (good disease/nitrogen balance after the previous crop)")
         elif score <= 50 and key == "temperature":
             limits.append(
-                f"Sıcaklık sınırda (sezon ort. {season.mean_temp_c}°C; optimum "
+                f"Temperature is borderline (season mean {season.mean_temp_c}°C; optimum "
                 f"{crop.temp_opt[0]}-{crop.temp_opt[1]}°C)"
             )
         elif score <= 50 and key == "water":
             limits.append(
-                f"Su açığı var (sezon yağışı {season.total_precip_mm} mm, "
-                f"ihtiyaç {crop.water_need_mm} mm, oran {water_ratio})"
+                f"Water deficit (season rainfall {season.total_precip_mm} mm, "
+                f"need {crop.water_need_mm} mm, ratio {water_ratio})"
             )
         elif score <= 50 and key == "ph":
-            limits.append(f"Toprak pH'ı sınırda (optimum {crop.ph_opt[0]}-{crop.ph_opt[1]})")
+            limits.append(f"Soil pH is borderline (optimum {crop.ph_opt[0]}-{crop.ph_opt[1]})")
         elif score <= 50 and key == "texture":
-            limits.append("Toprak dokusu bu ekin için ideal değil")
+            limits.append("Soil texture is not ideal for this crop")
         elif score <= 50 and key == "salinity":
-            limits.append("Tuzluluk bu ekin için risk oluşturabilir")
+            limits.append("Salinity may be a risk for this crop")
         elif score <= 50 and key == "climate_risk":
             limits.append(
-                f"İklim riski yüksek (don ayları: {len(season.frost_months)}, "
-                f"sıcak stresi ayları: {len(season.heat_months)})"
+                f"Climate risk is high (frost months: {len(season.frost_months)}, "
+                f"heat-stress months: {len(season.heat_months)})"
             )
         elif score <= 50 and key == "calendar":
-            limits.append("Ekim takvimi çiftçinin planladığı aydan uzak")
+            limits.append("Sowing calendar is far from the farmer's planned month")
         elif score <= 50 and key == "market":
-            limits.append("Pazar erişimi bu ürün için sınırlı olabilir")
+            limits.append("Market access may be limited for this crop")
         elif score <= 50 and key == "goal_fit":
-            limits.append(f"{label} seçilen hedefe göre düşük")
+            limits.append(f"{label} is low for the chosen goal")
         elif score <= 50 and key == "rotation":
             limits.append(
-                "Ekim nöbeti riskli: aynı ürün veya aynı familya üst üste geliyor; "
-                "hastalık ve besin tükenmesi riski artar"
+                "Rotation is risky: the same crop or family follows itself; "
+                "disease and nutrient depletion risk rises"
             )
 
     return strengths, limits
@@ -354,18 +357,18 @@ def evaluate_crop(
     warnings: list[str] = []
     if water_ratio is not None and water_ratio < 0.7:
         warnings.append(
-            f"{crop.local_name}: sezonluk su açığı ({(water_ratio * 100):.0f}% karşılama). "
-            "Sulama imkânı yoksa verim düşer."
+            f"{crop.name}: seasonal water deficit ({(water_ratio * 100):.0f}% covered). "
+            "Yield falls without irrigation."
         )
     if season.frost_months and crop.frost_tolerance < 0.4:
         warnings.append(
-            f"{crop.local_name}: sezon içinde don riski olan aylar var "
+            f"{crop.name}: the growing season includes frost-risk months "
             f"({', '.join(season.frost_months)})."
         )
     if len(season.frost_months) >= 3 and crop.frost_tolerance < 0.35:
         warnings.append(
-            f"{crop.local_name}: çok yıllık/don hassas bir ürün için 3+ donlu ay ciddi risk; "
-            "yerel çeşit ve mikro-klima doğrulaması olmadan önerilmez."
+            f"{crop.name}: 3+ frost months are a serious risk for a frost-sensitive crop; "
+            "do not recommend it without local variety and micro-climate checks."
         )
 
     completeness = len(present) / len(COMPONENT_WEIGHTS)
@@ -399,8 +402,8 @@ def evaluate_candidates(
                 filtered.append(crop)
             else:
                 warnings.append(
-                    f"{crop.local_name}, {request.preferences.max_growing_days} günlük sezon sınırını "
-                    f"aştığı için elendi ({crop.growing_days} gün)."
+                    f"{crop.name} was removed because it exceeds the "
+                    f"{request.preferences.max_growing_days}-day season limit ({crop.growing_days} days)."
                 )
         candidates = filtered
 
@@ -411,18 +414,18 @@ def evaluate_candidates(
         candidates = [crop for crop in candidates if crop.key not in excluded_keys]
         if len(candidates) < before:
             warnings.append(
-                "Çiftçinin hariç tuttuğu ekinler değerlendirmeden çıkarıldı: "
-                + ", ".join(sorted(crop.local_name for crop in excluded))
+                "Crops excluded by the farmer were removed from the evaluation: "
+                + ", ".join(sorted(crop.name for crop in excluded))
             )
     for name in unknown_excluded:
-        warnings.append(f"Hariç tutulan ekin adı tanınmadı: '{name}'.")
+        warnings.append(f"Unknown excluded crop name: '{name}'.")
 
     interested, unknown_interested = resolve_crops(request.preferences.crops_of_interest)
     interest_keys = {crop.key for crop in interested}
     for name in unknown_interested:
-        warnings.append(f"İlgi listesindeki ekin adı tanınmadı: '{name}'.")
+        warnings.append(f"Unknown crop name in the interest list: '{name}'.")
     if interest_keys & excluded_keys:
-        warnings.append("Aynı ekin hem ilgi listesinde hem hariç listesinde; hariç listesi önceliklidir.")
+        warnings.append("The same crop is both requested and excluded; the exclusion wins.")
 
     evaluations = [evaluate_crop(crop, request, environment) for crop in candidates]
 
@@ -430,7 +433,7 @@ def evaluate_candidates(
         if evaluation.crop.key in interest_keys:
             evaluation.interest_boost = 4.0
             evaluation.rule_score = round(min(100.0, evaluation.rule_score + 4.0), 1)
-            evaluation.strengths.append("Çiftçinin ilgi gösterdiği ürünlerden biri")
+            evaluation.strengths.append("One of the crops the farmer asked about")
 
     evaluations.sort(key=lambda item: (item.rule_score, item.crop.market_demand), reverse=True)
     return evaluations, warnings

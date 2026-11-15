@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 _UNSET = object()
 
 GEO_PAGE = """<!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Konumumu bul</title>
+<title>Find my location</title>
 <style>
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
          min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -55,11 +55,11 @@ GEO_PAGE = """<!doctype html>
 </head>
 <body>
 <main>
-  <h1>📍 Tarlanın konumunu bul</h1>
-  <p>Aşağıdaki düğmeye bas. Tarayıcı izin isterse <strong>İzin ver</strong> seç.</p>
-  <button id="go" type="button">Konumumu kullan</button>
+  <h1>📍 Find your field</h1>
+  <p>Tap the button below. If the browser asks for permission, choose <strong>Allow</strong>.</p>
+  <button id="go" type="button">Use my location</button>
   <div id="msg"></div>
-  <p class="hint">Konumun yalnızca bu cihazda, öneri hesaplamak için kullanılır. Sunucuda saklanmaz.</p>
+  <p class="hint">Your location is used only on this device to calculate advice. It is not stored on the server.</p>
 </main>
 <script>
   const target = __TARGET__;
@@ -67,17 +67,17 @@ GEO_PAGE = """<!doctype html>
   const go = document.getElementById('go');
   go.addEventListener('click', function () {
     if (!navigator.geolocation) {
-      msg.textContent = 'Tarayıcın konum özelliğini desteklemiyor. Enlem/boylamı elle girebilirsin.';
+      msg.textContent = 'Your browser does not support location. You can enter latitude/longitude manually.';
       return;
     }
-    msg.textContent = 'Konum isteniyor...';
+    msg.textContent = 'Requesting your location...';
     navigator.geolocation.getCurrentPosition(function (pos) {
       const lat = pos.coords.latitude.toFixed(5);
       const lon = pos.coords.longitude.toFixed(5);
       const sep = target.indexOf('?') === -1 ? '?' : '&';
       window.location.replace(target + sep + 'lat=' + lat + '&lon=' + lon);
     }, function (err) {
-      msg.textContent = 'Konum alınamadı (' + err.message + '). Tarayıcı ayarlarından konum iznini aç.';
+      msg.textContent = 'Location could not be read (' + err.message + '). Allow location access in your browser settings.';
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   });
 </script>
@@ -136,15 +136,15 @@ def create_app(
                 try:
                     await close()
                 except Exception:  # noqa: BLE001 - shutdown must not fail
-                    logger.warning("İstemci kapatılırken hata oluştu.", exc_info=True)
+                    logger.warning("Error while closing a client.", exc_info=True)
 
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "NASA POWER verileri + açıklanabilir agronomi kuralları + değiştirilebilir LLM "
-            "katmanı ile çiftçiler için karar destek API'si. Telefon uyumlu çiftçi arayüzü "
-            "`/app/` altında, Swagger bu adreste: `/docs`."
+            "Farmer decision-support API built on NASA POWER data, explainable agronomy "
+            "rules and an optional LLM layer. The mobile farmer app is served at `/app/` "
+            "and Swagger/OpenAPI docs at `/docs`."
         ),
         lifespan=lifespan,
         docs_url="/docs",
@@ -194,7 +194,7 @@ def create_app(
 
     @app.exception_handler(NASAAPIError)
     async def nasa_error_handler(request: Request, exc: NASAAPIError):
-        logger.warning("NASA POWER hatası: %s", exc)
+        logger.warning("NASA POWER error: %s", exc)
         return JSONResponse(
             status_code=502,
             content={
@@ -242,7 +242,7 @@ def create_app(
             name=settings.app_name,
             version=settings.app_version,
             description=(
-                "Çiftçiler için NASA POWER destekli, AI ile zenginleştirilmiş karar destek API'si."
+                "NASA POWER-backed, AI-enriched decision-support API for farmers."
             ),
             docs_url="/docs",
             openapi_url="/openapi.json",
@@ -252,6 +252,8 @@ def create_app(
                 "rotation": "POST /api/v1/rotation",
                 "soil_health": "POST /api/v1/soil-health",
                 "water_plan": "POST /api/v1/water-plan",
+                "economics": "POST /api/v1/economics",
+                "frost_risk": "GET /api/v1/frost-risk",
                 "analyze": "POST /api/v1/analyze",
                 "advice": "POST /api/v1/advice",
                 "environment": "GET /api/v1/environment",
@@ -266,10 +268,10 @@ def create_app(
 
     @app.get("/geo", response_class=HTMLResponse, include_in_schema=False)
     async def geo(next: str = "") -> HTMLResponse:
-        """Tarayıcıdan konum izni isteyen küçük sayfa.
+        """Small page that asks the browser for location permission.
 
-        İzin verilirse ``?lat=..&lon=..`` ile arayüze geri döner. Arayüz bu iki
-        parametreyi okuyup haritayı ve formu otomatik doldurur.
+        If permission is granted it returns to the app with ``?lat=..&lon=..``.
+        The app reads those values and pre-fills the map and form.
         """
 
         target = (next or settings.ui_base_url).strip()

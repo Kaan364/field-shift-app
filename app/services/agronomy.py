@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from app.clients.nasa_power import NASAResult
-from app.domain.crops import MONTH_NAMES_TR, CropProfile
+from app.domain.crops import MONTH_NAMES_EN, MONTH_NAMES_TR, CropProfile
 from app.schemas import (
     ClimateSummary,
     EnvironmentSnapshot,
@@ -33,15 +33,18 @@ MONTH_KEYS: tuple[str, ...] = (
 )
 MONTH_DAYS: tuple[int, ...] = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
-CLIMATE_CLASS_LABELS_TR = {
-    "hyper_arid": "hiper-kurak",
-    "arid": "kurak",
-    "semi_arid": "yarı kurak",
-    "dry_sub_humid": "kuru-yarı nemli",
-    "humid": "nemli",
-    "per_humid": "çok nemli",
-    "unknown": "bilinmiyor",
+CLIMATE_CLASS_LABELS_EN = {
+    "hyper_arid": "hyper-arid",
+    "arid": "arid",
+    "semi_arid": "semi-arid",
+    "dry_sub_humid": "dry sub-humid",
+    "humid": "humid",
+    "per_humid": "per-humid",
+    "unknown": "unknown",
 }
+
+# Backwards-compatible alias used by older modules.
+CLIMATE_CLASS_LABELS_TR = CLIMATE_CLASS_LABELS_EN
 
 IRRIGATION_SUPPLY_MM: dict[tuple[Irrigation, WaterAvailability], float] = {
     (Irrigation.RAINFED, WaterAvailability.LOW): 0.0,
@@ -197,12 +200,12 @@ def summarize_climate(climatology: NASAResult) -> ClimateSummary:
     growing_temps = [t2m[month] for month in growing_months if t2m[month] is not None]
 
     frost_months = [
-        MONTH_NAMES_TR[month - 1]
+        MONTH_NAMES_EN[month - 1]
         for month in range(1, 13)
         if tmin[month] is not None and tmin[month] < 0
     ]
     heat_months = [
-        MONTH_NAMES_TR[month - 1]
+        MONTH_NAMES_EN[month - 1]
         for month in range(1, 13)
         if tmax[month] is not None and tmax[month] >= 32
     ]
@@ -251,16 +254,16 @@ def summarize_soil(climatology: NASAResult, field: FieldProfile) -> SoilSummary:
 
     gaps: list[str] = []
     if field.soil_ph is None:
-        gaps.append("Toprak pH'ı girilmedi; pH puanı NASA verisinden tahmin edilemez.")
+        gaps.append("Soil pH was not entered; pH cannot be estimated from NASA data.")
     if field.organic_matter_pct is None:
-        gaps.append("Organik madde oranı girilmedi; toprak analizi önerilir.")
+        gaps.append("Organic matter was not entered; a soil test is recommended.")
     if field.soil_texture == SoilTexture.UNKNOWN:
-        gaps.append("Toprak dokusu girilmedi; bünye uyumu varsayılan puanla değerlendirildi.")
+        gaps.append("Soil texture was not entered; texture compatibility used a default score.")
     if field.salinity_ds_m is None:
-        gaps.append("Toprak tuzluluğu (EC) girilmedi; tuzluluk riski sınırlı doğrulukla değerlendirildi.")
+        gaps.append("Soil salinity (EC) was not entered; salinity risk has limited accuracy.")
     gaps.append(
-        "NASA POWER besin elementleri (N-P-K) ve organik madde sağlamaz; "
-        "bu değerler çiftçi beyanı veya laboratuvar analizi ile doğrulanmalıdır."
+        "NASA POWER does not provide nutrients (N-P-K) or organic matter; "
+        "these values must come from the farmer or a laboratory test."
     )
 
     return SoilSummary(
@@ -282,12 +285,12 @@ def soil_condition_label(score: float | None) -> str | None:
     if score is None:
         return None
     if score >= 80:
-        return "iyi"
+        return "good"
     if score >= 60:
-        return "orta"
+        return "fair"
     if score >= 40:
-        return "zayıf"
-    return "çok zayıf"
+        return "poor"
+    return "very poor"
 
 
 def summarize_recent_weather(daily: NASAResult, window_days: int) -> RecentWeather | None:
@@ -363,7 +366,7 @@ def build_environment(
     for month in range(1, 13):
         monthly.append(
             MonthlyClimate(
-                month=MONTH_NAMES_TR[month - 1],
+                month=MONTH_NAMES_EN[month - 1],
                 mean_temp_c=_round(t2m[month]),
                 min_temp_c=_round(tmin[month]),
                 max_temp_c=_round(tmax[month]),
@@ -387,24 +390,24 @@ def build_environment(
 
     notes = list(soil.data_gaps)
     notes.append(
-        "NASA POWER iklim verisi 25 yıllık (2001-2025) grid tabanlı bir ortalamadır; "
-        "tarla ölçeğinde ve bu yılın gerçek hasat verisi değildir."
+        "NASA POWER climate data is a 25-year (2001-2025) gridded average; "
+        "it is not field-scale and not this year's harvest data."
     )
     notes.append(
-        "Kuraklık sınıfı, sıcaklık ve yağıştan hesaplanan Hargreaves referans evapotranspirasyonuna "
-        "(ET0) göre tahmin edilir; resmî bir kuraklık endeksi değildir."
+        "The aridity class is estimated from temperature and rainfall using a Hargreaves "
+        "reference evapotranspiration (ET0); it is not an official drought index."
     )
     notes.append(
-        "NASA POWER çözünürlüğü yaklaşık 0.5° × 0.625°'dir (ekvatora yakın ~50-70 km). "
-        "Aynı grid hücresindeki iki tarla farklı toprak koşullarına sahip olabilir."
+        "NASA POWER resolution is about 0.5° × 0.625° (roughly 50-70 km). "
+        "Two fields in the same grid cell can have different soil conditions."
     )
     if daily is not None and recent is not None and recent.available_days < recent_days:
         notes.append(
-            f"Son {recent_days} günün yalnızca {recent.available_days} günü için geçerli veri bulundu; "
-            "NASA POWER'da son günler gecikmeli olabilir."
+            f"Only {recent.available_days} of the last {recent_days} days had valid data; "
+            "recent NASA POWER days can be delayed."
         )
     if recent is None:
-        notes.append("Son günlük hava verisi alınamadı; analiz iklim ortalamalarına dayanıyor.")
+        notes.append("Recent daily weather could not be loaded; the analysis uses climate averages.")
 
     env = EnvironmentSnapshot(
         nasa_elevation_m=_round(climatology.elevation_m, 1),
@@ -439,8 +442,8 @@ def month_span_label(months: tuple[int, ...]) -> str:
     if not months:
         return ""
     if len(months) == 1:
-        return MONTH_NAMES_TR[months[0] - 1]
-    return f"{MONTH_NAMES_TR[months[0] - 1]}–{MONTH_NAMES_TR[months[-1] - 1]}"
+        return MONTH_NAMES_EN[months[0] - 1]
+    return f"{MONTH_NAMES_EN[months[0] - 1]}–{MONTH_NAMES_EN[months[-1] - 1]}"
 
 
 def choose_start_month(crop: CropProfile, preferred_month: int | None) -> int:

@@ -1,8 +1,8 @@
 {
-  "name": "Tarla Dostu — NASA verisiyle ekim planı",
-  "short_name": "Tarla Dostu",
-  "description": "Tarlan için hava, toprak ve suya uygun ekim planı. NASA POWER verisiyle çalışan çiftçi karar destek aracı.",
-  "lang": "tr",
+  "name": "FieldWise — a crop plan from NASA data",
+  "short_name": "FieldWise",
+  "description": "A crop plan that fits your weather, soil and water. A mobile-first farmer decision-support tool powered by NASA POWER data.",
+  "lang": "en",
   "dir": "ltr",
   "start_url": "/app/",
   "scope": "/app/",

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Tarla Dostu — mobile-first farmer UI
+   FieldWise — mobile-first farmer UI
    Plain CSS, no build step. Designed for low-literacy users: large type,
    big tap targets, colour + icon + text (never colour alone).
    ========================================================================== */
@@ -387,10 +387,10 @@ details[open] > summary::after { transform: rotate(180deg); }
 .indicator .value { font-size: .82rem; font-weight: 800; color: var(--muted); white-space: nowrap; }
 .indicator .advice { grid-column: 1 / -1; font-size: .79rem; color: var(--muted); }
 .status { display: inline-block; font-size: .68rem; font-weight: 900; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
-.status.iyi { background: var(--green-soft); color: var(--green-dark); }
-.status.orta { background: var(--amber-soft); color: #7a5100; }
-.status.zayif { background: var(--red-soft); color: var(--red); }
-.status.bilinmiyor { background: #eef0ee; color: #6b7565; }
+.status.good { background: var(--green-soft); color: var(--green-dark); }
+.status.fair { background: var(--amber-soft); color: #7a5100; }
+.status.poor { background: var(--red-soft); color: var(--red); }
+.status.unknown { background: #eef0ee; color: #6b7565; }
 
 /* water */
 .water-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 14px 0; }
@@ -487,6 +487,53 @@ details[open] > summary::after { transform: rotate(180deg); }
 .banner { max-width: var(--max); margin: 8px auto 0; padding: 10px 16px; font-size: .82rem; font-weight: 700; border-radius: 12px; }
 .banner-warn { background: var(--amber-soft); color: #7a5100; }
 
+/* advisor note */
+.card-note { background: linear-gradient(145deg, #eef6ff, #f7fbff); border-color: #cfe2f2; }
+.card-note p { font-size: .94rem; line-height: 1.55; color: #21465e; margin-bottom: 0; }
+
+/* money */
+.money-headline { font-size: 1.08rem; font-weight: 800; color: var(--green-dark); margin-bottom: 2px; }
+.money-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 14px 0; }
+.money-stat { background: #f5f9f4; border: 1px solid #dceae0; border-radius: 13px; padding: 11px; }
+.money-stat strong { display: block; font-size: 1.12rem; line-height: 1.2; }
+.money-stat span { font-size: .72rem; color: var(--muted); font-weight: 700; }
+.money-stat.highlight { background: var(--green-soft); border-color: #c9e3cf; }
+.profit-range { margin: 6px 0 14px; }
+.range-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: .84rem; font-weight: 800; color: var(--muted); }
+.range-head strong { font-size: .98rem; color: var(--ink); }
+.range-track { position: relative; height: 13px; border-radius: 999px; background: #ecefe9; overflow: hidden; margin: 8px 0 4px; }
+.range-track span { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: linear-gradient(90deg, #2e8b4f, var(--lime)); }
+.range-track span.mid { background: linear-gradient(90deg, #d99a00, #f0c14b); }
+.range-track span.low { background: linear-gradient(90deg, #a83a2e, #d96a5a); }
+.money-years { display: grid; gap: 7px; margin-top: 6px; }
+.money-year { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 11px; background: #f8fbf7; border: 1px solid #e1ece3; border-radius: 11px; }
+.money-year-label { font-size: .84rem; font-weight: 800; }
+.money-year-value { font-size: .92rem; font-weight: 900; text-align: right; }
+.money-year-value.good { color: var(--green); }
+.money-year-value.low { color: var(--red); }
+.money-year-sub { grid-column: 1 / -1; font-size: .74rem; color: var(--muted); }
+.cost-list { display: grid; gap: 0; }
+.cost-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid #edf1ec; font-size: .85rem; }
+.cost-row:last-child { border-bottom: 0; }
+.cost-row strong { font-weight: 800; }
+
+/* risk */
+.risk-grid { display: grid; gap: 9px; margin: 14px 0; }
+.risk-card { border: 1px solid var(--line); border-radius: 13px; padding: 11px 12px; background: #fbfcfa; }
+.risk-card.warn { background: var(--amber-soft); border-color: #f0d79b; }
+.risk-card.bad { background: var(--red-soft); border-color: #f2c9c5; }
+.risk-head { display: flex; align-items: center; gap: 8px; }
+.risk-icon { font-size: 1.2rem; }
+.risk-head strong { flex: 1; font-size: .88rem; }
+.risk-level { font-size: .72rem; font-weight: 900; padding: 3px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--line); white-space: nowrap; }
+.risk-meter { height: 7px; border-radius: 999px; background: #e9eee8; overflow: hidden; margin: 8px 0 6px; }
+.risk-meter span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2e8b4f, var(--lime)); }
+.risk-meter span.warn { background: linear-gradient(90deg, #d99a00, #f0c14b); }
+.risk-meter span.bad { background: linear-gradient(90deg, #a83a2e, #d96a5a); }
+.risk-detail { margin: 0; font-size: .78rem; color: var(--muted); }
+.frost-window { background: var(--blue-soft); border-radius: 10px; padding: 10px 12px; font-size: .84rem; color: #1e4d6b; margin-top: 10px; }
+.frost-window p { margin: 0; }
+
 /* desktop */
 @media (min-width: 680px) {
   .feature-grid { grid-template-columns: repeat(3, 1fr); }
@@ -494,6 +541,8 @@ details[open] > summary::after { transform: rotate(180deg); }
   .goal-grid { grid-template-columns: repeat(3, 1fr); }
   .score-grid { grid-template-columns: 1fr 1fr; gap: 14px 20px; }
   .water-stats { grid-template-columns: repeat(4, 1fr); }
+  .money-stats { grid-template-columns: repeat(4, 1fr); }
+  .risk-grid { grid-template-columns: repeat(3, 1fr); }
   .trend-grid { grid-template-columns: 1fr 1fr; }
   .alt-grid { grid-template-columns: 1fr 1fr; }
   .result-actions { grid-template-columns: 1fr auto auto; }

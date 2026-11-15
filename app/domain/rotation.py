@@ -42,20 +42,20 @@ GOAL_WEIGHTS: dict[Goal, dict[str, float]] = {
 }
 
 _SCORE_LABELS = (
-    (85.0, "çok iyi"),
-    (70.0, "iyi"),
-    (55.0, "orta"),
-    (40.0, "zayıf"),
+    (85.0, "very good"),
+    (70.0, "good"),
+    (55.0, "fair"),
+    (40.0, "weak"),
 )
 
 
 def score_label(score: float | None) -> str:
     if score is None:
-        return "bilinmiyor"
+        return "unknown"
     for threshold, label in _SCORE_LABELS:
         if score >= threshold:
             return label
-    return "çok zayıf"
+    return "very weak"
 
 
 @dataclass
@@ -230,35 +230,35 @@ def _year_actions(
     planting_month: int | None,
 ) -> list[str]:
     actions: list[str] = []
-    window = crop.planting_window("tr")
-    actions.append(f"Ekim zamanı: {window}. Toprak tavını kontrol et.")
+    window = crop.planting_window("en")
+    actions.append(f"Sowing window: {window}. Check that the soil has enough moisture.")
     if year == 1 and planting_month is not None:
-        actions.append("Ekimden önce toprak analizi yaptır; gübreyi analize göre ayarla.")
+        actions.append("Get a soil test before sowing; set fertiliser rates from the test.")
     if previous is not None:
         if traits_for(previous.key).nitrogen_fixing:
             actions.append(
-                "Önceki ürün baklagildi; azot gübresini toprak analizine göre azaltmayı konuş."
+                "The previous crop was a legume; discuss reducing nitrogen fertiliser with a soil test."
             )
         else:
-            actions.append("Önceki anızı yakma; toprağa karıştır veya malç olarak bırak.")
+            actions.append("Do not burn the previous residue; incorporate it or leave it as mulch.")
     if deficit_mm is not None and deficit_mm > 30:
         actions.append(
-            f"Sezonda yaklaşık {int(deficit_mm)} mm ek su gerekebilir; sulama planını şimdi yap."
+            f"About {int(deficit_mm)} mm of extra water may be needed this season; plan irrigation now."
         )
     if traits.nitrogen_fixing:
-        actions.append("Bu baklagili hasattan sonra toprağa karıştırırsan toprak daha çok azot kazanır.")
+        actions.append("If you incorporate this legume after harvest, the soil gains more nitrogen.")
     if traits.family == "cereal":
-        actions.append("Hasattan sonra anızı bırak; toprak kurumasın ve erozyon olmasın.")
-    actions.append("Sezon boyunca haftada bir tarlayı gez; hastalık ve zararlıyı erken gör.")
+        actions.append("Leave the residue after harvest; it keeps the soil cool and reduces erosion.")
+    actions.append("Walk the field once a week; catch pests and disease early.")
     return actions[:5]
 
 
 def _cover_crop(crop: CropProfile) -> str | None:
     traits = traits_for(crop.key)
     if traits.family == "cereal":
-        return "Hasattan sonra fiğ + arpa karışımı (yeşil gübre) ekilebilir."
+        return "After harvest you can sow a vetch + barley mix as a green manure."
     if traits.family in {"oilseed", "root"}:
-        return "Kışa girerken fiğ veya yulaf karışımı toprağı örtebilir."
+        return "Before winter, a vetch or oats mix can cover the soil."
     return None
 
 
@@ -285,7 +285,7 @@ def _build_year(
         crop=crop,
         traits=traits,
         rule_score=round(evaluation.rule_score, 1),
-        planting_window=crop.planting_window("tr"),
+        planting_window=crop.planting_window("en"),
         water_need_mm=crop.water_need_mm,
         season_rain_mm=None if rain is None else round(rain, 1),
         role=traits.role or crop.category,
@@ -306,23 +306,23 @@ def _summarize(
     cautions: list[str] = []
 
     if any(t.nitrogen_fixing for t in traits):
-        benefits.append("Baklagil/hayvan yemi bitkisi havadan azot bağlar; azot gübresi masrafını azaltabilir.")
+        benefits.append("A legume/forage crop fixes nitrogen from the air and can cut nitrogen fertiliser cost.")
     if len({t.family for t in traits}) >= 2:
-        benefits.append("Farklı bitki familyaları üst üste gelmediği için hastalık ve zararlı baskısı düşer.")
+        benefits.append("Different crop families do not follow each other, so disease and pest pressure fall.")
     if _mean([t.residue_cover for t in traits]) >= 0.5:
-        benefits.append("Anız ve kökler toprağı örter; su kaybı ve erozyon azalır.")
+        benefits.append("Residue and roots cover the soil; water loss and erosion are reduced.")
     if len({t.rooting for t in traits}) >= 2:
-        benefits.append("Farklı kök derinlikleri toprağın farklı katmanlarındaki suyu ve besini kullanır.")
+        benefits.append("Different rooting depths use water and nutrients from different soil layers.")
     if total_need > 0 and total_rain + irrigation_supply_mm(request.resources) * len(crops) >= total_need:
-        benefits.append("Seçilen ürünlerin toplam su ihtiyacı bölgenin yağışı ve sulama imkânıyla karşılanabilir görünüyor.")
+        benefits.append("The total water need looks coverable by local rainfall and the reported irrigation.")
 
-    cautions.append("İlk yıl verim hemen artmayabilir; toprak sağlığı 2-3 yılda gelişir.")
+    cautions.append("Yield may not rise in year one; soil health improves over 2-3 years.")
     if _mean([crop.water_need_mm for crop in crops]) >= 550:
-        cautions.append("Seçilen ürünlerin su isteği yüksek; sulama imkânını sezon başında netleştir.")
+        cautions.append("These crops need a lot of water; settle the irrigation supply before the season.")
     if request.resources.irrigation == Irrigation.RAINFED:
-        cautions.append("Sulama yoksa kurak bir yılda verim düşebilir; kuraklığa dayanıklı çeşit seç.")
-    cautions.append("Fiyat ve pazar riski her yıl değişir; ekim öncesi alıcı veya kooperatif ara.")
-    cautions.append("NASA verisi bölge ortalamasıdır; tarlanın kendi toprağını ayrıca gözle ve analiz ettir.")
+        cautions.append("Without irrigation, yield can fall in a dry year; choose a drought-tolerant variety.")
+    cautions.append("Prices and markets change every year; look for a buyer or cooperative before sowing.")
+    cautions.append("NASA data is a regional average; observe and test your own soil separately.")
     return benefits, cautions
 
 
@@ -463,12 +463,12 @@ def build_rotation(
         return RotationResult(
             applicable=False,
             years_requested=years,
-            headline="Bu tarla için yıllık ekim nöbeti önerisi üretilemedi.",
+            headline="A yearly rotation could not be built for this field.",
             summary=(
-                "Aday ürünler çok yıllık (bağ, bahçe) olduğu için yıllık rotasyon uygulanmaz. "
-                "Tek ürün önerisini kullanabilirsin."
+                "The candidate crops are perennial (orchard/vineyard), so an annual rotation does not apply. "
+                "Use the single-crop recommendation instead."
             ),
-            notes=["Çok yıllık ürünlerde yıllık ekim nöbeti yerine bahçe bakım planı gerekir."],
+            notes=["Perennial crops need an orchard care plan rather than a yearly rotation."],
         )
 
     top_overall = evaluations[0].crop if evaluations else None
@@ -482,8 +482,8 @@ def build_rotation(
 
     if top_overall is not None and top_overall.key != start.crop.key:
         notes.append(
-            f"Bu yılın en güçlü tek ürün seçimi {top_overall.local_name}. "
-            f"Çok yıllık olduğu için yıllık ekim nöbeti {start.crop.local_name} ile başlatıldı."
+            f"The strongest single crop this year is {top_overall.name}. "
+            f"Because it is perennial, the yearly rotation starts with {start.crop.name}."
         )
 
     pool = _candidate_pool(evaluations, exclude=start.crop.key)
@@ -491,8 +491,8 @@ def build_rotation(
         return RotationResult(
             applicable=False,
             years_requested=years,
-            headline=f"{start.crop.local_name} için uygun bir rotasyon ortağı bulunamadı.",
-            summary="Aday ürün sayısı az. Farklı bir hedef seçerek veya hariç listesini değiştirerek tekrar dene.",
+            headline=f"No suitable rotation partner was found for {start.crop.name}.",
+            summary="There are too few candidate crops. Try another goal or change the excluded list.",
             notes=notes,
         )
 
@@ -500,7 +500,7 @@ def build_rotation(
     if not sequences:
         years = 2
         sequences = _generate_sequences(pool, start, 2)
-        notes.append("Uygun 3 yıllık sıra bulunamadı; 2 yıllık plan gösteriliyor.")
+        notes.append("No suitable 3-year sequence was found; a 2-year plan is shown.")
 
     scored: list[RotationOption] = []
     for sequence in sequences[:max_sequences]:
@@ -520,41 +520,41 @@ def build_rotation(
         return RotationResult(
             applicable=False,
             years_requested=years,
-            headline="Rotasyon planı oluşturulamadı.",
-            summary="Yeterli uygun ürün bulunamadı. Filtreleri gevşetip tekrar dene.",
+            headline="The rotation plan could not be built.",
+            summary="Not enough suitable crops were found. Relax the filters and try again.",
             notes=notes,
         )
 
     scored.sort(key=lambda option: (option.overall, option.soil, option.resilience), reverse=True)
     best = scored[0]
 
-    names = [year.crop.local_name for year in best.years]
-    headline = f"{len(best.years)} yıllık plan: " + " → ".join(names)
-    summary_parts = [f"Bu yıl {names[0]} ek."]
+    names = [year.crop.name for year in best.years]
+    headline = f"{len(best.years)}-year plan: " + " → ".join(names)
+    summary_parts = [f"Plant {names[0]} this year."]
     for offset, name in enumerate(names[1:], start=1):
         if offset == 1:
-            summary_parts.append(f"Gelecek yıl {name}.")
+            summary_parts.append(f"Next year: {name}.")
         elif offset == 2:
-            summary_parts.append(f"Sonraki yıl {name}.")
+            summary_parts.append(f"The year after: {name}.")
         else:
-            summary_parts.append(f"{offset + 1}. yıl {name}.")
+            summary_parts.append(f"Year {offset + 1}: {name}.")
     summary_parts.append(
-        f"Bu sıra toprak sağlığı {best.soil:.0f}, su dengesi {best.water:.0f} ve iklim dayanıklılığı "
-        f"{best.resilience:.0f} puan alıyor."
+        f"This sequence scores {best.soil:.0f} for soil health, {best.water:.0f} for water balance "
+        f"and {best.resilience:.0f} for climate resilience."
     )
     if best.irrigation_need_mm > 0:
         summary_parts.append(
-            f"Toplamda yaklaşık {best.irrigation_need_mm:.0f} mm ek sulama gerekebilir."
+            f"About {best.irrigation_need_mm:.0f} mm of extra irrigation may be needed in total."
         )
     summary = " ".join(summary_parts)
 
     if not any(traits_for(crop.key).nitrogen_fixing for crop in [y.crop for y in best.years]):
         notes.append(
-            "Bu planda baklagil yok. Toprağa azot kazandırmak için bir yıl nohut, mercimek veya fiğ eklemeyi düşün."
+            "This plan has no legume. Add one year of chickpea, lentil or vetch to put nitrogen back in the soil."
         )
     notes.append(
-        "Rotasyon puanları yaklaşık bir modeldir; verim veya kâr garantisi değildir. "
-        "Yerel çeşit, pazar ve sulama koşullarını uzmanla doğrula."
+        "Rotation scores are an approximate model; they are not a yield or profit guarantee. "
+        "Confirm local varieties, markets and irrigation with an expert."
     )
     return RotationResult(
         applicable=True,

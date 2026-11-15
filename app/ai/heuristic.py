@@ -296,6 +296,46 @@ def _advice_confidence(candidates: list[dict[str, Any]], missing: int) -> str:
     return "medium"
 
 
+def _commentary(context: AdviceContext, crop_name: str | None = None) -> str:
+    """Plain-English AI-style note that combines money and weather risk."""
+
+    econ = context.economics or {}
+    risk = context.risk or {}
+    name = crop_name or "this crop"
+    parts: list[str] = []
+
+    margin_decare = _num(econ.get("margin_per_decare_usd"), 0)
+    cost = _num(econ.get("total_cost_usd"), 0)
+    low = _num(econ.get("low_profit_usd"), 0)
+    high = _num(econ.get("high_profit_usd"), 0)
+    if margin_decare is not None:
+        parts.append(
+            f"For {name}, the planning budget leaves about ${margin_decare} profit per decare "
+            f"after about ${cost} of costs for your field."
+        )
+    if low is not None and high is not None:
+        parts.append(f"Depending on price and yield, the result could range from ${low} to ${high}.")
+
+    frost = risk.get("frost")
+    heat = risk.get("heat")
+    drought = risk.get("drought")
+    if frost or heat or drought:
+        parts.append(
+            f"Weather risk is frost: {frost or 'unknown'}, heat: {heat or 'unknown'}, "
+            f"drought: {drought or 'unknown'}."
+        )
+    if risk.get("last_frost_month"):
+        parts.append(f"In a normal year the last spring frost is in {risk['last_frost_month']}.")
+    if risk.get("first_frost_month"):
+        parts.append(f"The first autumn frost is normally in {risk['first_frost_month']}.")
+
+    headline = econ.get("headline")
+    if headline:
+        parts.append(str(headline) + ".")
+    parts.append("These are planning estimates. Check the local price and the 5-day forecast before you act.")
+    return " ".join(part for part in parts if part).strip()
+
+
 def _missing_questions_tr(context: AdviceContext) -> list[str]:
     field = context.farmer.get("field") or {}
     questions: list[str] = []
@@ -400,6 +440,7 @@ def _build_advice_tr(context: AdviceContext) -> AdvicePlan:
     return AdvicePlan(
         headline=headline,
         why=" ".join(why_parts),
+        commentary=_commentary(context, name),
         steps=steps[:5],
         grow=grow[:5],
         feed=feed[:5],
@@ -455,6 +496,7 @@ def _build_advice_en(context: AdviceContext) -> AdvicePlan:
     return AdvicePlan(
         headline=headline,
         why=why,
+        commentary=_commentary(context, name),
         steps=[
             "Get a soil test first so you know what fertiliser you need.",
             f"Planting window: {top.get('planting_window') or 'your local window'}.",

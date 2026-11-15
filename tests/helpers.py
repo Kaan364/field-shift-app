@@ -218,7 +218,7 @@ def request_payload(**overrides) -> dict:
             "market_access": "medium",
         },
         "top_n": 3,
-        "language": "tr",
+        "language": "en",
     }
     payload.update(overrides)
     return payload
@@ -226,19 +226,19 @@ def request_payload(**overrides) -> dict:
 
 def ai_json_response(**overrides) -> dict:
     payload = {
-        "summary": "Test özeti.",
+        "summary": "Test summary.",
         "crops": [
             {
                 "crop_key": "wheat",
                 "ai_score": 90,
-                "rationale": "Buğday uygundur.",
-                "risks": ["Kuraklık"],
-                "actions": ["Sulama planı"],
-                "planting_window": "Ekim–Kasım",
+                "rationale": "Wheat is suitable.",
+                "risks": ["Drought"],
+                "actions": ["Plan irrigation"],
+                "planting_window": "October–November",
             }
         ],
-        "general_risks": ["Fiyat dalgalanması"],
-        "general_actions": ["Toprak analizi"],
+        "general_risks": ["Price volatility"],
+        "general_actions": ["Get a soil test"],
         "confidence": "medium",
         "notes": "Test",
     }

@@ -1,4 +1,4 @@
-"""Serbest metinli öneri akışı (`/api/v1/advice`) ve coğrafi kodlama testleri."""
+"""Free-text advice flow (`/api/v1/advice`) and reverse-geocoding tests."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 from app.ai.base import AIContext, AIProvider, AdviceContext
 from app.clients.geocoding import NominatimClient
 from app.schemas import AdvicePlan, GeocodeResponse
-from tests.helpers import ai_json_response  # noqa: F401  (fixture benzeri yardımcı)
+from tests.helpers import ai_json_response  # noqa: F401  (fixture-like helper)
 
 
 def advice_payload(**overrides) -> dict:
@@ -23,31 +23,31 @@ def advice_payload(**overrides) -> dict:
         "goal": "max_profit",
         "planting_month": 10,
         "free_text": (
-            "Edirne'de 20 dönüm tarlam var. Ne ekeceğimi bilmiyorum. "
-            "Bitkiyi nasıl büyüteceğimi, nasıl besleyeceğimi bilmiyorum."
+            "I have 20 decare in Edirne and I do not know what to plant. "
+            "I do not know how to grow or feed the crop either."
         ),
         "top_n": 3,
-        "language": "tr",
+        "language": "en",
     }
     payload.update(overrides)
     return payload
 
 
 def test_advice_plan_coerces_list_text_fields():
-    """Modeller `headline`/`why` alanlarını bazen liste döndürüyor; plan reddedilmemeli."""
+    """Models sometimes return `headline`/`why` as lists; the plan must not be rejected."""
 
     plan = AdvicePlan.model_validate(
         {
-            "headline": ["Kışlık Buğday ekin.", "Arpa alternatif."],
-            "why": ["Yağış uygun.", "Kış soğuk geçer."],
-            "steps": "Toprağı işle.\nEkim yap.",
+            "headline": ["Plant winter wheat.", "Barley is an alternative."],
+            "why": ["Rainfall is suitable.", "Winter is cold."],
+            "steps": "Till the soil.\nSow the seed.",
             "confidence": "HIGH",
         }
     )
 
-    assert plan.headline == "Kışlık Buğday ekin. Arpa alternatif."
-    assert plan.why == "Yağış uygun. Kış soğuk geçer."
-    assert plan.steps == ["Toprağı işle.", "Ekim yap."]
+    assert plan.headline == "Plant winter wheat. Barley is an alternative."
+    assert plan.why == "Rainfall is suitable. Winter is cold."
+    assert plan.steps == ["Till the soil.", "Sow the seed."]
     assert plan.confidence == "high"
 
 
@@ -59,15 +59,30 @@ def test_advice_with_heuristic_provider(client):
     assert data["ai"]["kind"] == "deterministic"
     assert data["advice"]["headline"]
     assert len(data["recommendations"]) == 3
-    assert data["advice"]["steps"], "basit adımlar boş olmamalı"
+    assert data["advice"]["steps"], "simple steps must not be empty"
     assert data["advice"]["grow"]
     assert data["advice"]["feed"]
     assert data["advice"]["care"]
 
-    # Sıralama kural motorundan gelir: final == rule
+    # Ranking comes from the rule engine: final == rule
     for rec in data["recommendations"]:
         assert rec["scores"]["final_score"] == rec["scores"]["rule_score"]
         assert rec["scores"]["ai_score"] is None
+
+
+def test_advice_includes_economics_and_risk(client):
+    response = client.post("/api/v1/advice", json=advice_payload())
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert data["economics"]["available"] is True
+    assert data["economics"]["crops"]
+    assert data["economics"]["total_gross_margin_usd"] is not None
+    assert data["risk"]["frost"]
+    assert data["risk"]["heat"]
+    assert data["risk"]["drought"]
+    assert data["risk"]["months"]
+    assert data["advice"]["commentary"]
 
 
 def test_advice_rejects_invalid_location(client):
@@ -84,20 +99,20 @@ class RecordingProvider(AIProvider):
     def __init__(self) -> None:
         self.contexts: list[AdviceContext] = []
 
-    async def analyze(self, context: AIContext):  # pragma: no cover - kullanılmaz
-        raise AssertionError("advice akışı analyze() çağırmamalı")
+    async def analyze(self, context: AIContext):  # pragma: no cover - unused
+        raise AssertionError("advice flow must not call analyze()")
 
     async def advise(self, context: AdviceContext) -> AdvicePlan:
         self.contexts.append(context)
         return AdvicePlan(
-            headline="Kışlık Buğday ek. Bu bölgede en uygun seçenek.",
-            why="Yağış ve sıcaklık buğdaya uygun.",
-            steps=["Toprak analizi yaptır.", "Ekim zamanını kaçırma."],
-            grow=["Tohum yatağını düzle."],
-            feed=["Gübreyi analize göre ver."],
-            care=["Tarlayı haftada bir gez."],
-            risks=["Kuraklık riski var."],
-            ask_farmer=["Tarlanı sulayabiliyor musun?"],
+            headline="Plant winter wheat. It is the best option here.",
+            why="Rainfall and temperature suit wheat.",
+            steps=["Get a soil test.", "Do not miss the sowing window."],
+            grow=["Level the seed bed."],
+            feed=["Apply fertiliser according to the soil test."],
+            care=["Walk the field once a week."],
+            risks=["There is a drought risk."],
+            ask_farmer=["Can you irrigate your field?"],
             confidence="medium",
         )
 
@@ -109,15 +124,15 @@ def test_advice_passes_free_text_to_ai(make_client):
     response = client.post("/api/v1/advice", json=advice_payload())
     assert response.status_code == 200, response.text
 
-    assert provider.contexts, "AI sağlayıcısı çağrılmalı"
+    assert provider.contexts, "the AI provider must be called"
     context = provider.contexts[0]
-    assert "Ne ekeceğimi bilmiyorum" in context.free_text
-    assert context.candidates, "kural motoru adayları AI'a aktarılmalı"
+    assert "I do not know what to plant" in context.free_text
+    assert context.candidates, "rule-engine candidates must be passed to the AI"
 
     data = response.json()
     assert data["ai"]["kind"] == "llm"
     assert data["ai"]["used"] is True
-    assert data["advice"]["headline"].startswith("Kışlık Buğday")
+    assert data["advice"]["headline"].startswith("Plant winter wheat")
 
 
 class FailingProvider(AIProvider):
@@ -126,10 +141,10 @@ class FailingProvider(AIProvider):
     kind = "llm"
 
     async def analyze(self, context: AIContext):  # pragma: no cover
-        raise AssertionError("kullanılmaz")
+        raise AssertionError("unused")
 
     async def advise(self, context: AdviceContext) -> AdvicePlan:
-        raise RuntimeError("kotu aşıldı")
+        raise RuntimeError("quota exceeded")
 
 
 def test_advice_falls_back_when_ai_fails(make_client):
@@ -141,14 +156,14 @@ def test_advice_falls_back_when_ai_fails(make_client):
     assert data["ai"]["fallback_used"] is True
     assert data["ai"]["error"]
     assert data["advice"]["headline"]
-    assert any("Yapay zekâya ulaşılamadı" in warning for warning in data["warnings"])
+    assert any("AI service could not be reached" in warning for warning in data["warnings"])
 
 
 def test_advice_without_free_text_still_works(client):
     response = client.post("/api/v1/advice", json=advice_payload(free_text=""))
     assert response.status_code == 200
     data = response.json()
-    assert data["advice"]["ask_farmer"], "eksik bilgi için soru sorulmalı"
+    assert data["advice"]["ask_farmer"], "missing information should trigger a question"
 
 
 class FakeGeocoder:
@@ -188,7 +203,7 @@ def test_reverse_geocode_validation(client):
 
 
 # ---------------------------------------------------------------------------
-# Nominatim istemcisi
+# Nominatim client
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_nominatim_client_parses_and_caches():
@@ -218,7 +233,7 @@ async def test_nominatim_client_parses_and_caches():
     assert first.city == "Edirne"
     assert first.display_name == "Edirne, Merkez, Edirne"
     assert second.city == "Edirne"
-    assert len(calls) == 1, "aynı koordinat önbellekten dönmeli"
+    assert len(calls) == 1, "the same coordinate must be served from cache"
     assert calls[0].headers["User-Agent"].startswith("ProjectAlphecca")
 
 

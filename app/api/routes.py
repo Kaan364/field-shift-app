@@ -16,10 +16,12 @@ from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
     CropInfo,
+    EconomicsResponse,
     EnvironmentResponse,
     FarmPlanRequest,
     FarmPlanResponse,
     FieldProfile,
+    FrostRiskResponse,
     GeocodeResponse,
     Location,
     RotationResponse,
@@ -33,7 +35,7 @@ router = APIRouter(prefix="/api/v1", tags=["agronomy"])
 @router.post(
     "/analyze",
     response_model=AnalyzeResponse,
-    summary="Bölge ve çiftçi girdilerine göre ekin önerisi üret",
+    summary="Rank crops for a location and a farmer profile",
 )
 async def analyze(payload: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """Run the full pipeline: NASA POWER -> rule engine -> AI -> ranked advice."""
@@ -45,12 +47,12 @@ async def analyze(payload: AnalyzeRequest, request: Request) -> AnalyzeResponse:
 @router.get(
     "/environment",
     response_model=EnvironmentResponse,
-    summary="NASA POWER iklim/toprak özetini ham öneri olmadan getir",
+    summary="Get the NASA POWER climate and soil summary without advice",
 )
 async def environment(
     request: Request,
-    latitude: Annotated[float, Query(ge=-90, le=90, description="WGS84 enlem")],
-    longitude: Annotated[float, Query(ge=-180, le=180, description="WGS84 boylam")],
+    latitude: Annotated[float, Query(ge=-90, le=90, description="WGS84 latitude")],
+    longitude: Annotated[float, Query(ge=-180, le=180, description="WGS84 longitude")],
     region_name: Annotated[str | None, Query(max_length=120)] = None,
     recent_days: Annotated[int, Query(ge=7, le=90)] = 30,
 ) -> EnvironmentResponse:
@@ -62,10 +64,10 @@ async def environment(
 @router.post(
     "/advice",
     response_model=AdviceResponse,
-    summary="Serbest metinle sorulan 'ne ekeyim?' sorusuna sade dilli öneri",
+    summary="Plain-language answer to the farmer's 'what should I plant?' question",
 )
 async def advice(payload: AdviceRequest, request: Request) -> AdviceResponse:
-    """Çiftçinin kendi cümleleri + NASA verisi + kural motoru + (varsa) AI açıklaması."""
+    """Farmer text + NASA data + rule engine + optional AI explanation."""
 
     service = request.app.state.advice
     return await service.advise(payload)
@@ -74,7 +76,7 @@ async def advice(payload: AdviceRequest, request: Request) -> AdviceResponse:
 @router.get(
     "/reverse-geocode",
     response_model=GeocodeResponse,
-    summary="Koordinatı yer adına çevir (OpenStreetMap Nominatim)",
+    summary="Turn coordinates into a place name (OpenStreetMap Nominatim)",
 )
 async def reverse_geocode(
     request: Request,
@@ -87,13 +89,13 @@ async def reverse_geocode(
             found=False,
             latitude=latitude,
             longitude=longitude,
-            error="Coğrafi kodlama bu sunucuda kapalı.",
+            error="Reverse geocoding is disabled on this server.",
         )
     return await geocoder.reverse(latitude, longitude)
 
 
 @router.get(
-    "/crops", response_model=list[CropInfo], summary="Desteklenen ekin kataloğu"
+    "/crops", response_model=list[CropInfo], summary="Supported crop catalogue"
 )
 async def crops() -> list[CropInfo]:
     output: list[CropInfo] = []
@@ -108,7 +110,7 @@ async def crops() -> list[CropInfo]:
                 growing_days=crop.growing_days,
                 water_need_mm=crop.water_need_mm,
                 planting_months=list(crop.planting_months),
-                planting_window=crop.planting_window("tr"),
+                planting_window=crop.planting_window("en"),
                 nitrogen_need=crop.nitrogen_need,
                 notes=crop.notes,
                 icon=traits.icon,
@@ -124,7 +126,7 @@ async def crops() -> list[CropInfo]:
 @router.post(
     "/farm-plan",
     response_model=FarmPlanResponse,
-    summary="Tek çağrıda tam çiftlik planı: bu yıl + 3 yıllık rotasyon + toprak + su + iklim",
+    summary="One call for the full farm plan: this year, rotation, soil, water, money and risk",
 )
 async def farm_plan(payload: FarmPlanRequest, request: Request) -> FarmPlanResponse:
     service = request.app.state.farm_plan
@@ -134,7 +136,7 @@ async def farm_plan(payload: FarmPlanRequest, request: Request) -> FarmPlanRespo
 @router.post(
     "/rotation",
     response_model=RotationResponse,
-    summary="Çok yıllık ekim nöbeti (rotasyon) planı",
+    summary="Multi-year crop rotation plan",
 )
 async def rotation(payload: FarmPlanRequest, request: Request) -> RotationResponse:
     service = request.app.state.farm_plan
@@ -144,7 +146,7 @@ async def rotation(payload: FarmPlanRequest, request: Request) -> RotationRespon
 @router.post(
     "/soil-health",
     response_model=SoilHealthResponse,
-    summary="Toprak sağlığı karnesi ve iyileştirme adımları",
+    summary="Soil-health report card and improvement steps",
 )
 async def soil_health(payload: FarmPlanRequest, request: Request) -> SoilHealthResponse:
     service = request.app.state.farm_plan
@@ -154,17 +156,51 @@ async def soil_health(payload: FarmPlanRequest, request: Request) -> SoilHealthR
 @router.post(
     "/water-plan",
     response_model=WaterPlanResponse,
-    summary="Aylık su dengesi, sulama ihtiyacı ve su tasarrufu önerileri",
+    summary="Monthly water balance, irrigation need and water-saving tips",
 )
 async def water_plan(payload: FarmPlanRequest, request: Request) -> WaterPlanResponse:
     service = request.app.state.farm_plan
     return await service.water_plan(payload)
 
 
+@router.post(
+    "/economics",
+    response_model=EconomicsResponse,
+    summary="Profit and cost analysis in USD per hectare and per decare",
+)
+async def economics(payload: FarmPlanRequest, request: Request) -> EconomicsResponse:
+    service = request.app.state.farm_plan
+    return await service.economics(payload)
+
+
+@router.get(
+    "/frost-risk",
+    response_model=FrostRiskResponse,
+    summary="Frost, heat and drought risk from long-term climate normals",
+)
+async def frost_risk(
+    request: Request,
+    latitude: Annotated[float, Query(ge=-90, le=90, description="WGS84 latitude")],
+    longitude: Annotated[float, Query(ge=-180, le=180, description="WGS84 longitude")],
+    region_name: Annotated[str | None, Query(max_length=120)] = None,
+    crop: Annotated[str | None, Query(max_length=80, description="Optional crop key")] = None,
+    irrigation: Annotated[str, Query(pattern="^(rainfed|limited|full)$")] = "rainfed",
+    planting_month: Annotated[int | None, Query(ge=1, le=12)] = None,
+) -> FrostRiskResponse:
+    service = request.app.state.farm_plan
+    payload = FarmPlanRequest(
+        location=Location(latitude=latitude, longitude=longitude, region_name=region_name),
+        start_crop=crop,
+        irrigation=irrigation,  # type: ignore[arg-type]
+        planting_month=planting_month,
+    )
+    return await service.frost_risk(payload)
+
+
 @router.get(
     "/ai-providers",
     response_model=list[AIProviderInfo],
-    summary="Desteklenen AI sağlayıcıları ve karşılaştırmaları",
+    summary="Supported AI providers and their trade-offs",
 )
 async def ai_providers() -> list[AIProviderInfo]:
     return list(AI_PROVIDER_INFO)

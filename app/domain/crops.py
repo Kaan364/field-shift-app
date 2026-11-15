@@ -28,6 +28,21 @@ MONTH_NAMES_TR = (
     "Aralık",
 )
 
+MONTH_NAMES_EN = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
 # Texture families used for a coarse compatibility score.
 TEXTURE_GROUP = {
     "sand": "light",

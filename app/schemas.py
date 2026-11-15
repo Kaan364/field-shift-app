@@ -144,7 +144,7 @@ class AnalyzeRequest(BaseModel):
     resources: Resources = Field(default_factory=Resources)
     preferences: Preferences = Field(default_factory=Preferences)
     top_n: int = Field(3, ge=1, le=8)
-    language: Language = Language.TR
+    language: Language = Language.EN
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -173,7 +173,7 @@ class AnalyzeRequest(BaseModel):
                     "market_access": "medium",
                 },
                 "top_n": 3,
-                "language": "tr",
+                "language": "en",
             }
         }
     )
@@ -321,28 +321,29 @@ class EnvironmentResponse(BaseModel):
 # Free-text advice ("ne ekeyim?" akışı)
 # ---------------------------------------------------------------------------
 class AdviceRequest(BaseModel):
-    """Çiftçinin kendi cümleleriyle soru sorduğu basit akış.
+    """Simple farmer flow.
 
-    Tüm alanlar isteğe bağlıdır (konum hariç); çiftçi bilmediği alanı boş bırakır.
+    Every field except location is optional; the farmer can leave unknown
+    answers empty and still receive advice.
     """
 
     location: Location
-    area_hectares: float | None = Field(None, gt=0, le=1_000_000, description="Dönüm değil, hektar")
+    area_hectares: float | None = Field(None, gt=0, le=1_000_000, description="Area in hectares, not decare")
     soil_texture: SoilTexture = SoilTexture.UNKNOWN
     soil_ph: float | None = Field(None, ge=3.5, le=10.0)
     organic_matter_pct: float | None = Field(None, ge=0, le=30)
     salinity_ds_m: float | None = Field(None, ge=0, le=40)
     drainage: Drainage = Drainage.MEDIUM
     slope_pct: float | None = Field(None, ge=0, le=80)
-    previous_crop: str | None = Field(None, max_length=80, description="Geçen sezon ekilen ürün (TR/EN adı)")
+    previous_crop: str | None = Field(None, max_length=80, description="Last season's crop (English or local name)")
     irrigation: Irrigation = Irrigation.RAINFED
     water_availability: WaterAvailability = WaterAvailability.MEDIUM
     market_access: MarketAccess = MarketAccess.MEDIUM
     goal: Goal = Goal.MAX_PROFIT
     planting_month: int | None = Field(None, ge=1, le=12)
-    free_text: str = Field("", max_length=2000, description="Çiftçinin kendi cümleleriyle anlattıkları")
+    free_text: str = Field("", max_length=2000, description="What the farmer says in their own words")
     top_n: int = Field(3, ge=1, le=5)
-    language: Language = Language.TR
+    language: Language = Language.EN
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -354,21 +355,22 @@ class AdviceRequest(BaseModel):
                 "irrigation": "limited",
                 "goal": "max_profit",
                 "free_text": (
-                    "Edirne'de 20 dönüm tarlam var. Ne ekeceğimi bilmiyorum. "
-                    "Bitkiyi nasıl büyüteceğimi, nasıl besleyeceğimi ve nasıl bakacağımı da bilmiyorum."
+                    "I have 20 decare in Edirne. I do not know what to plant. "
+                    "I also do not know how to grow, feed or care for a crop."
                 ),
                 "top_n": 3,
-                "language": "tr",
+                "language": "en",
             }
         },
     )
 
 
 class AdvicePlan(BaseModel):
-    """Sadeleştirilmiş, düşük okuryazarlık için kısa cümleli öneri planı."""
+    """Short, plain-language advice plan for low-literacy users."""
 
     headline: str = ""
     why: str = ""
+    commentary: str = ""
     steps: list[str] = Field(default_factory=list)
     grow: list[str] = Field(default_factory=list)
     feed: list[str] = Field(default_factory=list)
@@ -377,10 +379,10 @@ class AdvicePlan(BaseModel):
     ask_farmer: list[str] = Field(default_factory=list)
     confidence: Literal["low", "medium", "high"] = "medium"
 
-    @field_validator("headline", "why", mode="before")
+    @field_validator("headline", "why", "commentary", mode="before")
     @classmethod
     def _coerce_text(cls, value: Any) -> str:
-        """Bazı modeller tek cümlelik alanı liste olarak döndürüyor; birleştir."""
+        """Some models return a sentence field as a list; join it."""
 
         if value is None:
             return ""
@@ -404,6 +406,131 @@ class AdvicePlan(BaseModel):
         return text if text in {"low", "medium", "high"} else "medium"
 
 
+# ---------------------------------------------------------------------------
+# Profit and cost analysis
+# ---------------------------------------------------------------------------
+class CostLineInfo(BaseModel):
+    key: str
+    label: str
+    amount_usd: float
+
+
+class CropEconomicsInfo(BaseModel):
+    crop_key: str
+    crop_name: str
+    area_hectares: float
+    yield_t_per_ha: float
+    price_usd_per_t: float
+    expected_yield_t: float
+    revenue_usd: float
+    total_cost_usd: float
+    gross_margin_usd: float
+    margin_per_ha_usd: float
+    margin_per_decare_usd: float
+    total_cost_per_ha_usd: float
+    break_even_price_usd_per_t: float
+    break_even_yield_t_per_ha: float
+    roi_pct: float
+    low_profit_usd: float
+    high_profit_usd: float
+    costs: list[CostLineInfo] = Field(default_factory=list)
+    confidence: str = "medium"
+    summary: str = ""
+    notes: list[str] = Field(default_factory=list)
+
+
+class EconomicsYearInfo(BaseModel):
+    year: int
+    crop_key: str
+    crop_name: str
+    revenue_usd: float
+    total_cost_usd: float
+    gross_margin_usd: float
+    margin_per_decare_usd: float
+    confidence: str = "medium"
+
+
+class EconomicsSection(BaseModel):
+    """Simple money view: income, costs, profit and break-even."""
+
+    available: bool = False
+    headline: str = ""
+    summary: str = ""
+    currency: str = "USD"
+    area_hectares: float = 0
+    area_decare: float = 0
+    total_revenue_usd: float = 0
+    total_cost_usd: float = 0
+    total_gross_margin_usd: float = 0
+    margin_per_decare_usd: float = 0
+    break_even_price_usd_per_t: float = 0
+    roi_pct: float = 0
+    low_profit_usd: float = 0
+    high_profit_usd: float = 0
+    crops: list[CropEconomicsInfo] = Field(default_factory=list)
+    years: list[EconomicsYearInfo] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Frost, heat and drought risk
+# ---------------------------------------------------------------------------
+class FrostInfo(BaseModel):
+    risk_level: Literal["low", "medium", "high", "unknown"] = "unknown"
+    risk_label: str = "Unknown"
+    probability_pct: float = 0
+    first_frost_month: str | None = None
+    last_frost_month: str | None = None
+    frost_free_window: str = ""
+    frost_free_days: int = 0
+    min_temp_c: float | None = None
+    frost_months: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+
+
+class HeatInfo(BaseModel):
+    risk_level: Literal["low", "medium", "high", "unknown"] = "unknown"
+    risk_label: str = "Unknown"
+    probability_pct: float = 0
+    max_temp_c: float | None = None
+    heat_months: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+
+
+class DroughtInfo(BaseModel):
+    risk_level: Literal["low", "medium", "high", "unknown"] = "unknown"
+    risk_label: str = "Unknown"
+    deficit_mm: float = 0
+    annual_rain_mm: float | None = None
+    dry_months: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+
+
+class MonthRiskInfo(BaseModel):
+    month: str
+    frost_probability_pct: float = 0
+    heat_probability_pct: float = 0
+    risk_level: Literal["low", "medium", "high", "unknown"] = "unknown"
+
+
+class RiskSection(BaseModel):
+    overall_level: Literal["low", "medium", "high", "unknown"] = "unknown"
+    overall_label: str = "Unknown"
+    crop_key: str | None = None
+    crop_name: str | None = None
+    summary: str = ""
+    frost: FrostInfo
+    heat: HeatInfo
+    drought: DroughtInfo
+    months: list[MonthRiskInfo] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
 class AdviceResponse(BaseModel):
     advice_id: str
     generated_at: datetime
@@ -412,6 +539,8 @@ class AdviceResponse(BaseModel):
     environment: EnvironmentSnapshot
     recommendations: list[CropRecommendation]
     advice: AdvicePlan
+    economics: EconomicsSection
+    risk: RiskSection
     summary: str
     warnings: list[str] = Field(default_factory=list)
     ai: AIMetadata
@@ -498,11 +627,11 @@ class ApiInfo(BaseModel):
 class FarmPlanRequest(AdviceRequest):
     """Farmer request for the complete plan (advice + rotation + soil + water)."""
 
-    rotation_years: int = Field(3, ge=2, le=4, description="2, 3 veya 4 yıllık ekim nöbeti")
+    rotation_years: int = Field(3, ge=2, le=4, description="Rotation length: 2, 3 or 4 years")
     start_crop: str | None = Field(
         None,
         max_length=80,
-        description="Rotasyonun ilk yılı için isteğe bağlı ürün anahtarı/adı",
+        description="Optional crop key/name for the first rotation year",
     )
 
     model_config = ConfigDict(
@@ -519,10 +648,10 @@ class FarmPlanRequest(AdviceRequest):
                 "water_availability": "medium",
                 "goal": "soil_health",
                 "planting_month": 10,
-                "free_text": "Toprağım yoruldu, bu yıl ne eksem iyi olur?",
+                "free_text": "My soil is tired. What should I plant this year?",
                 "rotation_years": 3,
                 "top_n": 3,
-                "language": "tr",
+                "language": "en",
             }
         },
     )
@@ -651,7 +780,7 @@ class ClimateSection(BaseModel):
     baseline_precip_mm: float | None = None
     recent_precip_mm: float | None = None
     risk_level: str = "unknown"
-    risk_label: str = "Bilinmiyor"
+    risk_label: str = "Unknown"
     trends: list[ClimateTrendInfo] = Field(default_factory=list)
     messages: list[str] = Field(default_factory=list)
     dry_months: list[str] = Field(default_factory=list)
@@ -672,11 +801,30 @@ class FarmPlanResponse(BaseModel):
     soil_health: SoilHealthSection
     water: WaterSection
     climate: ClimateSection
+    economics: EconomicsSection
+    risk: RiskSection
     summary: str
     warnings: list[str] = Field(default_factory=list)
     data_sources: list[DataSource] = Field(default_factory=list)
     ai: AIMetadata
     disclaimer: str
+
+
+class EconomicsResponse(BaseModel):
+    generated_at: datetime
+    location: Location
+    environment: EnvironmentSnapshot
+    economics: EconomicsSection
+    risk: RiskSection | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class FrostRiskResponse(BaseModel):
+    generated_at: datetime
+    location: Location
+    environment: EnvironmentSnapshot
+    risk: RiskSection
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RotationResponse(BaseModel):

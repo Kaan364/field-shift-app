@@ -30,19 +30,19 @@ INDICATOR_WEIGHTS = {
 }
 
 TEXTURE_LABELS = {
-    SoilTexture.UNKNOWN: "Bilmiyorum",
-    SoilTexture.SAND: "Kum",
-    SoilTexture.LOAMY_SAND: "Tınlı kum",
-    SoilTexture.SANDY_LOAM: "Kumlu tın",
-    SoilTexture.LOAM: "Tın (ideal)",
-    SoilTexture.SILT_LOAM: "Siltli tın",
+    SoilTexture.UNKNOWN: "I don't know",
+    SoilTexture.SAND: "Sand",
+    SoilTexture.LOAMY_SAND: "Loamy sand",
+    SoilTexture.SANDY_LOAM: "Sandy loam",
+    SoilTexture.LOAM: "Loam (ideal)",
+    SoilTexture.SILT_LOAM: "Silt loam",
     SoilTexture.SILT: "Silt",
-    SoilTexture.CLAY_LOAM: "Killi tın",
-    SoilTexture.SANDY_CLAY_LOAM: "Kumlu killi tın",
-    SoilTexture.CLAY: "Kil (ağır)",
+    SoilTexture.CLAY_LOAM: "Clay loam",
+    SoilTexture.SANDY_CLAY_LOAM: "Sandy clay loam",
+    SoilTexture.CLAY: "Clay (heavy)",
 }
 
-DRAINAGE_LABELS = {Drainage.POOR: "Zayıf", Drainage.MEDIUM: "Orta", Drainage.GOOD: "İyi"}
+DRAINAGE_LABELS = {Drainage.POOR: "Poor", Drainage.MEDIUM: "Medium", Drainage.GOOD: "Good"}
 
 TEXTURE_SCORES = {
     "medium": 100.0,
@@ -79,12 +79,12 @@ class SoilHealthReport:
 
 def _status(score: float | None) -> str:
     if score is None:
-        return "bilinmiyor"
+        return "unknown"
     if score >= 80:
-        return "iyi"
+        return "good"
     if score >= 55:
-        return "orta"
-    return "zayıf"
+        return "fair"
+    return "poor"
 
 
 def _grade(score: float | None) -> str:
@@ -101,16 +101,16 @@ def _grade(score: float | None) -> str:
 
 def _label(score: float | None) -> str:
     if score is None:
-        return "bilinmiyor"
+        return "unknown"
     if score >= 80:
-        return "iyi"
+        return "good"
     if score >= 65:
-        return "orta-iyi"
+        return "fair to good"
     if score >= 50:
-        return "orta"
+        return "fair"
     if score >= 35:
-        return "zayıf"
-    return "çok zayıf"
+        return "poor"
+    return "very poor"
 
 
 def _texture_score(texture: SoilTexture) -> float | None:
@@ -145,45 +145,45 @@ def _slope_score(value: float | None) -> float | None:
 def _indicator_advice(key: str, score: float | None, field: FieldProfile) -> str:
     if score is None:
         return {
-            "organic_matter": "Toprak analizi yaptırıp organik madde oranını öğren.",
-            "ph": "Toprak analizindeki pH değerini öğren.",
-            "texture": "Toprağı eline al: dağılıyorsa kumlu, yapışıyorsa killi, ufalanıyorsa tınlıdır.",
-            "salinity": "Toprak analizinde tuzluluk (EC) değerini iste.",
-            "slope": "Tarlanın eğimini gözle tahmin et veya ölç.",
-        }.get(key, "Bu bilgi henüz yok.")
+            "organic_matter": "Get a soil test and ask for the organic-matter percentage.",
+            "ph": "Get the pH value from a soil test.",
+            "texture": "Rub soil in your hand: crumbly is loam, gritty is sand, sticky is clay.",
+            "salinity": "Ask for the salinity (EC) value in the soil test.",
+            "slope": "Estimate or measure the slope of the field.",
+        }.get(key, "This information is not available yet.")
     if score >= 80:
         return {
-            "organic_matter": "Organik madde iyi. Anızı yakmadan toprağa karıştırmaya devam et.",
-            "ph": "pH uygun. Kireç veya asit düzenleyiciye gerek yok.",
-            "texture": "Toprak bünyesi uygun. Sıkışmayı önlemek için ağır makineleri ıslak toprağa sokma.",
-            "salinity": "Tuzluluk düşük. Aşırı gübreden kaçınmaya devam et.",
-            "drainage": "Drenaj iyi. Su birikintisi oluşmuyorsa böyle devam et.",
-            "moisture": "Toprak nemi uygun aralıkta.",
-            "soil_temp": "Toprak sıcaklığı ekim için uygun.",
-            "slope": "Eğim düşük; erozyon riski sınırlı.",
-            "rotation": "Ekim nöbeti çeşitliliği iyi.",
-        }.get(key, "Durum iyi.")
+            "organic_matter": "Organic matter is good. Keep returning residue to the soil and never burn it.",
+            "ph": "pH is suitable. No lime or acidifier is needed now.",
+            "texture": "Soil texture is suitable. Keep heavy machines off wet soil to avoid compaction.",
+            "salinity": "Salinity is low. Keep avoiding too much fertiliser.",
+            "drainage": "Drainage is good. Keep it that way if water does not pool.",
+            "moisture": "Soil moisture is in a good range.",
+            "soil_temp": "Soil temperature is suitable for sowing.",
+            "slope": "Slope is low; erosion risk is limited.",
+            "rotation": "Rotation diversity is good.",
+        }.get(key, "The condition is good.")
     if key == "organic_matter":
-        return "Her yıl 2-3 ton/da yanmış hayvan gübresi veya yeşil gübre ekle. Anızı yakma."
+        return "Add 2-3 tonnes of mature manure or a green manure every year. Do not burn residue."
     if key == "ph":
         if field.soil_ph is not None and field.soil_ph < 6.0:
-            return "Toprak asitli. Kireç miktarını toprak analizine göre uzmanla belirle."
-        return "Toprak alkali. Jips/kükürt ve organik madde için uzmana danış; sulama suyunu kontrol et."
+            return "The soil is acidic. Ask an expert how much lime to apply after a soil test."
+        return "The soil is alkaline. Ask an expert about gypsum/sulphur and organic matter; check irrigation water."
     if key == "texture":
-        return "Organik madde ve malçla bünyeyi iyileştir; ıslak toprakta sürüm yapma."
+        return "Improve structure with organic matter and mulch; do not plough wet soil."
     if key == "salinity":
-        return "Drenajı iyileştir, aşırı gübreden kaçın, tuzlu suyla sulama yapma."
+        return "Improve drainage, avoid excess fertiliser and do not irrigate with salty water."
     if key == "drainage":
-        return "Drenaj kanalı aç; ağır toprakta su birikmesini önle."
+        return "Open a drainage channel; stop water pooling on heavy soil."
     if key == "moisture":
-        return "Anız/malç ile toprak nemini koru; damla sulama ve malçlama kullan."
+        return "Keep soil moisture with residue/mulch; use drip irrigation and mulching."
     if key == "soil_temp":
-        return "Toprak sıcaklığı sınırda; ekimi toprak ısınınca yap."
+        return "Soil temperature is borderline; sow after the soil warms up."
     if key == "slope":
-        return "Eğime dik ekim, şerit ekim ve anız bırakma ile erozyonu azalt."
+        return "Reduce erosion with contour sowing, strip cropping and leaving residue."
     if key == "rotation":
-        return "Ekim nöbetine baklagil veya yem bitkisi ekle."
-    return "Bu değeri iyileştirmek için yerel tarım uzmanına danış."
+        return "Add a legume or a forage crop to the rotation."
+    return "Ask your local extension service how to improve this value."
 
 
 def assess_soil_health(
@@ -209,47 +209,47 @@ def assess_soil_health(
 
     add(
         "organic_matter",
-        "Organik madde (humus)",
+        "Organic matter (humus)",
         field.organic_matter_pct,
         "%",
         band_score(field.organic_matter_pct, (3.0, 6.0), (0.0, 10.0)),
     )
-    add("ph", "Toprak pH'ı", field.soil_ph, "pH", band_score(field.soil_ph, (6.2, 7.5), (4.0, 9.5)))
+    add("ph", "Soil pH", field.soil_ph, "pH", band_score(field.soil_ph, (6.2, 7.5), (4.0, 9.5)))
     add(
         "texture",
-        "Toprak bünyesi",
+        "Soil texture",
         None,
         "",
         _texture_score(field.soil_texture),
     )
-    add("salinity", "Tuzluluk (EC)", field.salinity_ds_m, "dS/m", _salinity_score(field.salinity_ds_m))
+    add("salinity", "Salinity (EC)", field.salinity_ds_m, "dS/m", _salinity_score(field.salinity_ds_m))
     add(
         "drainage",
-        "Drenaj",
+        "Drainage",
         None,
         "",
         {Drainage.GOOD: 100.0, Drainage.MEDIUM: 70.0, Drainage.POOR: 35.0}.get(field.drainage),
     )
     add(
         "moisture",
-        "Toprak nemi (NASA)",
+        "Soil moisture (NASA)",
         soil.root_zone_moisture_mean,
         "0-1",
         band_score(soil.root_zone_moisture_mean, (0.40, 0.70), (0.0, 1.0)),
     )
     add(
         "soil_temp",
-        "Toprak sıcaklığı (NASA)",
+        "Soil temperature (NASA)",
         soil.mean_soil_temp_c,
         "°C",
         band_score(soil.mean_soil_temp_c, (15.0, 25.0), (0.0, 40.0)),
     )
-    add("slope", "Tarla eğimi", field.slope_pct, "%", _slope_score(field.slope_pct))
+    add("slope", "Field slope", field.slope_pct, "%", _slope_score(field.slope_pct))
 
     best_rotation = rotation.best if rotation is not None and rotation.applicable else None
     add(
         "rotation",
-        "Ekim nöbeti çeşitliliği",
+        "Rotation diversity",
         None,
         "",
         None if best_rotation is None else best_rotation.soil,
@@ -270,42 +270,42 @@ def assess_soil_health(
     actions = [item.advice for item in ranked[:3]]
     if not actions:
         actions = [
-            "Toprak sağlığın iyi görünüyor. Her yıl toprak analizi yaptır ve anızı yakma.",
-            "Ekim nöbetine bir baklagil ekleyerek azot ihtiyacını azalt.",
-            "Yağış ve toprak nemini kaydet; sulamayı ihtiyaca göre yap.",
+            "Your soil looks good. Test it every year and never burn residue.",
+            "Add a legume to the rotation to reduce nitrogen fertiliser.",
+            "Record rainfall and soil moisture; irrigate only when the crop needs it.",
         ]
-    actions.append("Toprak analizini 2-3 yılda bir tekrarla; analiz olmadan gübre dozu verme.")
+    actions.append("Repeat the soil test every 2-3 years; never apply fertiliser without a test.")
 
     gaps: list[str] = []
     if field.soil_ph is None:
-        gaps.append("pH girilmedi; toprak analizi gerekir.")
+        gaps.append("pH was not entered; a soil test is needed.")
     if field.organic_matter_pct is None:
-        gaps.append("Organik madde girilmedi; toprak analizi gerekir.")
+        gaps.append("Organic matter was not entered; a soil test is needed.")
     if field.soil_texture == SoilTexture.UNKNOWN:
-        gaps.append("Toprak bünyesi girilmedi.")
+        gaps.append("Soil texture was not entered.")
     if field.salinity_ds_m is None:
-        gaps.append("Tuzluluk (EC) girilmedi.")
-    gaps.append("NASA POWER N-P-K, pH veya organik madde sağlamaz; bu değerler çiftçi/laboratuvar verisidir.")
+        gaps.append("Salinity (EC) was not entered.")
+    gaps.append("NASA POWER does not provide N-P-K, pH or organic matter; these are farmer/lab values.")
 
     outlook = None
     if score is not None:
         legume = bool(best_rotation and any(year.traits.nitrogen_fixing for year in best_rotation.years))
         if score < 55:
-            outlook = "Toprak zayıf. Bu planla 2-3 yılda organik madde ve yapı iyileşebilir; ilk yıl sabırlı ol."
+            outlook = "Soil is weak. This plan can improve organic matter and structure in 2-3 years; be patient in year one."
         elif legume:
-            outlook = "Bu ekim nöbeti toprağa azot ve organik madde kazandırır; 2-3 yılda iyileşme beklenir."
+            outlook = "This rotation adds nitrogen and organic matter; expect improvement in 2-3 years."
         else:
-            outlook = "Toprağı korumak için anız bırakma, az sürüm ve baklagil eklemeyi sürdür."
+            outlook = "Keep protecting the soil with residue cover, reduced tillage and a legume in the rotation."
 
     if score is None:
-        summary = "Toprak karnesi henüz oluşmadı. En az pH ve organik madde bilgisi gir."
+        summary = "The soil report card is not ready. Enter at least pH and organic matter."
     elif ranked:
         summary = (
-            f"Toprak sağlığı {score:.0f}/100 ({_label(score)}). "
-            f"En zayıf konu: {ranked[0].label}."
+            f"Soil health is {score:.0f}/100 ({_label(score)}). "
+            f"Weakest topic: {ranked[0].label}."
         )
     else:
-        summary = f"Toprak sağlığı {score:.0f}/100 ({_label(score)})."
+        summary = f"Soil health is {score:.0f}/100 ({_label(score)})."
 
     return SoilHealthReport(
         score=score,
@@ -317,7 +317,7 @@ def assess_soil_health(
         data_gaps=gaps,
         outlook=outlook,
         notes=[
-            "Toprak karnesi; pH, organik madde ve tuzluluk gibi çiftçi/laboratuvar verileri ile NASA toprak nemi/sıcaklığı proxy'lerini birleştirir.",
-            "Puanlar yaklaşık ve açıklanabilir bir modeldir; resmî toprak verimliliği sınıflandırması değildir.",
+            "Soil report card: combines farmer/lab values such as pH, organic matter and salinity with NASA soil-moisture and temperature proxies.",
+            "The scores are an approximate, explainable model; they are not an official soil-fertility classification.",
         ],
     )

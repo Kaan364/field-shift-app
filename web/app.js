@@ -1,40 +1,40 @@
 /* =============================================================================
-   Tarla Dostu — farmer UI logic (vanilla JS, no build step)
+   FieldWise — farmer UI logic (vanilla JS, no build step)
    ========================================================================== */
 (function () {
   "use strict";
 
   const $ = (id) => document.getElementById(id);
   const API = "";
-  const LAST_PLAN_KEY = "tarladostu.lastPlan.v1";
-  const CHECKS_KEY = "tarladostu.checks.v1";
-  const TEXT_KEY = "tarladostu.bigText";
+  const LAST_PLAN_KEY = "fieldwise.lastPlan.v1";
+  const CHECKS_KEY = "fieldwise.checks.v1";
+  const TEXT_KEY = "fieldwise.bigText";
 
   const MONTHS = [
-    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
   ];
-  const MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+  const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const CITIES = [
     ["Adana", 37.0000, 35.3213], ["Ankara", 39.9334, 32.8597], ["Antalya", 36.8969, 30.7133],
-    ["Aydın", 37.8560, 27.8416], ["Balıkesir", 39.6484, 27.8826], ["Bursa", 40.1885, 29.0610],
-    ["Çanakkale", 40.1553, 26.4142], ["Diyarbakır", 37.9144, 40.2306], ["Edirne", 41.6771, 26.5557],
-    ["Erzurum", 39.9043, 41.2679], ["Eskişehir", 39.7767, 30.5206], ["Gaziantep", 37.0662, 37.3833],
-    ["Isparta", 37.7648, 30.5566], ["İzmir", 38.4237, 27.1428], ["Kayseri", 38.7312, 35.4787],
-    ["Konya", 37.8746, 32.4932], ["Kütahya", 39.4167, 29.9833], ["Malatya", 38.3552, 38.3095],
-    ["Mersin", 36.8000, 34.6333], ["Samsun", 41.2928, 36.3313], ["Şanlıurfa", 37.1591, 38.7969],
-    ["Tekirdağ", 40.9833, 27.5167], ["Tokat", 40.3167, 36.5500], ["Van", 38.4942, 43.3800],
+    ["Aydin", 37.8560, 27.8416], ["Balikesir", 39.6484, 27.8826], ["Bursa", 40.1885, 29.0610],
+    ["Canakkale", 40.1553, 26.4142], ["Diyarbakir", 37.9144, 40.2306], ["Edirne", 41.6771, 26.5557],
+    ["Erzurum", 39.9043, 41.2679], ["Eskisehir", 39.7767, 30.5206], ["Gaziantep", 37.0662, 37.3833],
+    ["Isparta", 37.7648, 30.5566], ["Izmir", 38.4237, 27.1428], ["Kayseri", 38.7312, 35.4787],
+    ["Konya", 37.8746, 32.4932], ["Kutahya", 39.4167, 29.9833], ["Malatya", 38.3552, 38.3095],
+    ["Mersin", 36.8000, 34.6333], ["Samsun", 41.2928, 36.3313], ["Sanliurfa", 37.1591, 38.7969],
+    ["Tekirdag", 40.9833, 27.5167], ["Tokat", 40.3167, 36.5500], ["Van", 38.4942, 43.3800],
     ["Yozgat", 39.8200, 34.8044],
   ];
 
   const CROP_OPTIONS = [
-    ["wheat", "Buğday"], ["barley", "Arpa"], ["triticale", "Tritikale"], ["oats", "Yulaf"],
-    ["maize", "Mısır"], ["sunflower", "Ayçiçeği"], ["canola", "Kanola"], ["safflower", "Aspir"],
-    ["chickpea", "Nohut"], ["lentil", "Mercimek"], ["soybean", "Soya"], ["potato", "Patates"],
-    ["sugar_beet", "Şeker pancarı"], ["alfalfa", "Yonca"], ["sainfoin", "Korunga"],
-    ["vetch", "Fiğ"], ["tomato", "Domates"], ["cotton", "Pamuk"], ["olive", "Zeytin"],
-    ["grape", "Üzüm"], ["apple", "Elma"],
+    ["wheat", "Wheat"], ["barley", "Barley"], ["triticale", "Triticale"], ["oats", "Oats"],
+    ["maize", "Maize"], ["sunflower", "Sunflower"], ["canola", "Canola"], ["safflower", "Safflower"],
+    ["chickpea", "Chickpea"], ["lentil", "Lentil"], ["soybean", "Soybean"], ["potato", "Potato"],
+    ["sugar_beet", "Sugar beet"], ["alfalfa", "Alfalfa"], ["sainfoin", "Sainfoin"],
+    ["vetch", "Vetch"], ["tomato", "Tomato"], ["cotton", "Cotton"], ["olive", "Olive"],
+    ["grape", "Grape"], ["apple", "Apple"],
   ];
 
   const ICONS = {
@@ -45,9 +45,9 @@
   };
 
   const CLIMATE_LABELS = {
-    hyper_arid: "hiper-kurak", arid: "kurak", semi_arid: "yarı kurak",
-    dry_sub_humid: "kuru-yarı nemli", humid: "nemli", per_humid: "çok nemli",
-    unknown: "bilinmiyor",
+    hyper_arid: "hyper-arid", arid: "arid", semi_arid: "semi-arid",
+    dry_sub_humid: "dry sub-humid", humid: "humid", per_humid: "per-humid",
+    unknown: "unknown",
   };
 
   const state = {
@@ -72,7 +72,16 @@
   }
   function num(value, digits) {
     if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
-    return new Intl.NumberFormat("tr-TR", {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: digits == null ? 0 : digits,
+    }).format(Number(value));
+  }
+  function money(value, digits) {
+    if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: digits == null ? 0 : digits,
     }).format(Number(value));
@@ -94,11 +103,11 @@
     }, 3200);
   }
   function rating(score) {
-    if (score == null) return { label: "Bilinmiyor", stars: "☆☆☆☆☆", tone: "mid" };
-    if (score >= 85) return { label: "Çok uygun", stars: "★★★★★", tone: "good" };
-    if (score >= 70) return { label: "Uygun", stars: "★★★★☆", tone: "good" };
-    if (score >= 55) return { label: "Orta", stars: "★★★☆☆", tone: "mid" };
-    return { label: "Zor", stars: "★★☆☆☆", tone: "low" };
+    if (score == null) return { label: "Unknown", stars: "☆☆☆☆☆", tone: "mid" };
+    if (score >= 85) return { label: "Very suitable", stars: "★★★★★", tone: "good" };
+    if (score >= 70) return { label: "Suitable", stars: "★★★★☆", tone: "good" };
+    if (score >= 55) return { label: "Fair", stars: "★★★☆☆", tone: "mid" };
+    return { label: "Difficult", stars: "★★☆☆☆", tone: "low" };
   }
   function toneClass(score) {
     if (score == null) return "mid";
@@ -117,11 +126,16 @@
       .map((item) => `<li${variant ? ` class="${variant}"` : ""}>${esc(item)}</li>`)
       .join("");
   }
-  function climateLabel(value) { return CLIMATE_LABELS[value] || value || "bilinmiyor"; }
+  function climateLabel(value) { return CLIMATE_LABELS[value] || value || "unknown"; }
   function directionIcon(direction) {
     if (direction === "up") return "⬆️";
     if (direction === "down") return "⬇️";
     return "➡️";
+  }
+  function riskTone(level) {
+    if (level === "high") return "bad";
+    if (level === "medium") return "warn";
+    return "";
   }
 
   /* ------------------------------------------------------------- boot / nav */
@@ -172,9 +186,9 @@
     });
     $("progressBar").style.width = `${(state.step / 3) * 100}%`;
     $("stepLabel").textContent = `${state.step} / 3`;
-    $("wizardHint").textContent = `Adım ${state.step} / 3`;
+    $("wizardHint").textContent = `Step ${state.step} / 3`;
     $("wizardNav").hidden = state.step === 3;
-    $("backBtn").setAttribute("aria-label", state.step === 1 ? "Ana sayfaya dön" : "Geri");
+    $("backBtn").setAttribute("aria-label", state.step === 1 ? "Back to home" : "Back");
     if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -225,18 +239,18 @@
     const latitude = Number(lat);
     const longitude = Number(lon);
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-      toast("Enlem -90 ile 90 arasında olmalı.");
+      toast("Latitude must be between -90 and 90.");
       return;
     }
     if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      toast("Boylam -180 ile 180 arasında olmalı.");
+      toast("Longitude must be between -180 and 180.");
       return;
     }
     state.lat = latitude;
     state.lon = longitude;
     $("latInput").value = latitude.toFixed(5);
     $("lonInput").value = longitude.toFixed(5);
-    $("placeName").textContent = `Seçilen nokta: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    $("placeName").textContent = `Selected point: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     $("formMsg").hidden = true;
     $("geoMsg").textContent = "";
     if (opts.zoom !== false) {
@@ -268,23 +282,23 @@
     const button = $("geoBtn");
     const message = $("geoMsg");
     if (!navigator.geolocation) {
-      message.textContent = "Tarayıcın konumu desteklemiyor. İl seçebilirsin.";
+      message.textContent = "Your browser does not support location. You can pick a city.";
       return;
     }
     button.disabled = true;
-    message.textContent = "Konum isteniyor… İzin ver.";
+    message.textContent = "Requesting your location… Please allow it.";
     navigator.geolocation.getCurrentPosition(
       (position) => {
         button.disabled = false;
         message.textContent = "";
         setLocation(position.coords.latitude, position.coords.longitude, { zoomLevel: 14, reverse: true });
-        toast("Tarlan haritada işaretlendi.");
+        toast("Your field is marked on the map.");
       },
       (error) => {
         button.disabled = false;
         const text = error && error.code === 1
-          ? "Konum izni verilmedi. İl seçebilir veya haritaya dokunabilirsin."
-          : "Konum alınamadı. Haritaya dokun veya il seç.";
+          ? "Location permission was denied. Pick a city or tap the map."
+          : "Location could not be read. Tap the map or pick a city.";
         message.textContent = text;
         toast(text);
       },
@@ -296,14 +310,14 @@
   function validateStep(step) {
     if (step === 1) {
       if (state.lat == null || state.lon == null) {
-        toast("Önce tarlanın yerini seç.");
+        toast("First choose the place of your field.");
         return false;
       }
     }
     if (step === 2) {
       const area = Number($("areaInput").value);
       if (!Number.isFinite(area) || area <= 0) {
-        toast("Tarla büyüklüğünü gir. Bilmiyorsan 10 bırak.");
+        toast("Enter the field size. Leave it at 10 if you do not know.");
         $("areaInput").focus();
         return false;
       }
@@ -314,7 +328,7 @@
   function collectPayload() {
     const irrigation = document.querySelector('input[name="irrigation"]:checked')?.value || "rainfed";
     const goal = document.querySelector('input[name="goal"]:checked')?.value || "max_profit";
-    const areaDonum = Math.max(1, Number($("areaInput").value) || 10);
+    const areaDecare = Math.max(1, Number($("areaInput").value) || 10);
     const month = $("monthSelect").value;
     return {
       location: {
@@ -322,7 +336,7 @@
         longitude: state.lon,
         region_name: state.place || null,
       },
-      area_hectares: Math.max(0.01, areaDonum / 10),
+      area_hectares: Math.max(0.01, areaDecare / 10),
       soil_texture: $("textureSelect").value || "unknown",
       soil_ph: numOrNull($("phInput").value),
       organic_matter_pct: numOrNull($("omInput").value),
@@ -338,7 +352,7 @@
       free_text: $("freeText").value.trim(),
       top_n: 3,
       rotation_years: Number($("yearsSelect").value) || 3,
-      language: "tr",
+      language: "en",
     };
   }
 
@@ -368,14 +382,14 @@
       savePlan(data, payload);
       renderPlan(data);
       showScreen("screen-result");
-      toast("Planın hazır. Aşağı kaydır ve oku.");
+      toast("Your plan is ready. Scroll down and read it.");
     } catch (error) {
       stopLoadingMessages();
       showScreen("screen-wizard");
       goToStep(3, { scroll: false });
       const message = error && error.name === "AbortError"
-        ? "Sunucu çok yavaş yanıt verdi. İnternetini kontrol edip tekrar dene."
-        : (error && error.message) || "Plan hazırlanamadı. Tekrar dene.";
+        ? "The server took too long. Check your internet and try again."
+        : (error && error.message) || "The plan could not be built. Try again.";
       $("formMsg").textContent = message;
       $("formMsg").hidden = false;
       $("submitBtn").disabled = false;
@@ -387,29 +401,30 @@
 
   function friendlyError(status, data) {
     if (status === 502) {
-      return "NASA verisine şu an ulaşamadık. İnternetini kontrol et ve birkaç dakika sonra tekrar dene.";
+      return "We cannot reach the NASA data right now. Check your internet and try again in a few minutes.";
     }
     if (status === 422) {
       const detail = data && (data.message || data.detail);
       return detail
-        ? `Bazı bilgiler eksik veya geçersiz: ${String(detail).slice(0, 140)}`
-        : "Bazı bilgiler eksik. Tarla bilgilerini kontrol et.";
+        ? `Some information is missing or invalid: ${String(detail).slice(0, 140)}`
+        : "Some information is missing. Check the field details.";
     }
     if (status === 503) {
-      return "Açıklama servisi şu an yanıt vermiyor. Kural motoruyla tekrar denemek için biraz bekle.";
+      return "The explanation service is not responding. Wait a moment and try the rule engine again.";
     }
     if (status >= 500) {
-      return "Sunucuda bir sorun var. Birkaç dakika sonra tekrar dene.";
+      return "The server has a problem. Try again in a few minutes.";
     }
-    return (data && data.message) || "İstek tamamlanamadı. Bilgileri kontrol et.";
+    return (data && data.message) || "The request could not be completed. Check the information.";
   }
 
   const LOADING_MESSAGES = [
-    "NASA'dan 25 yıllık hava verisi alınıyor…",
-    "Tarlanın yağışı ve sıcaklığı hesaplanıyor…",
-    "Toprak sağlığı ve su dengesi çıkarılıyor…",
-    "3 yıllık ekim sırası kuruluyor…",
-    "Sade bir plan hazırlanıyor…",
+    "Fetching 25 years of weather data from NASA…",
+    "Calculating rainfall and temperature for your field…",
+    "Working out soil health and the water balance…",
+    "Building the three-year crop sequence…",
+    "Estimating costs, profit and weather risk…",
+    "Writing a simple plan…",
   ];
   function startLoadingMessages() {
     let index = 0;
@@ -445,7 +460,7 @@
         state.payload = saved.payload || null;
         renderPlan(saved.data);
         showScreen("screen-result");
-        toast("Son planın açıldı.");
+        toast("Your last plan is open.");
       }
       return saved;
     } catch (error) {
@@ -457,7 +472,9 @@
     $("lastPlanBtn").hidden = !saved;
     if (saved) {
       const days = Math.max(0, Math.floor((Date.now() - saved.savedAt) / 86400000));
-      $("lastPlanBtn").textContent = days === 0 ? "📋 Son planımı aç" : `📋 Son planımı aç (${days} gün önce)`;
+      $("lastPlanBtn").textContent = days === 0
+        ? "📋 Open my last plan"
+        : `📋 Open my last plan (${days} day${days === 1 ? "" : "s"} ago)`;
     }
   }
 
@@ -473,38 +490,43 @@
     const soil = data.soil_health || {};
     const water = data.water || {};
     const climateOutlook = data.climate || {};
+    const economics = data.economics || {};
+    const risk = data.risk || {};
 
     const areaHa = state.payload ? Number(state.payload.area_hectares) : null;
-    const donum = areaHa ? Math.round(areaHa * 10) : null;
-    const place = data.location?.region_name || state.place || "Tarlan";
-    $("resultPlace").textContent = `📍 ${place}${donum ? ` • ${num(donum)} dönüm` : ""}`;
-    $("resultClimate").textContent = `🌦️ ${climateLabel(climate.climate_class)} • yıllık yağış ${num(climate.annual_precip_mm)} mm`;
+    const decare = areaHa ? Math.round(areaHa * 10) : null;
+    const place = data.location?.region_name || state.place || "Your field";
+    $("resultPlace").textContent = `📍 ${place}${decare ? ` • ${num(decare)} decare` : ""}`;
+    $("resultClimate").textContent = `🌦️ ${climateLabel(climate.climate_class)} • annual rain ${num(climate.annual_precip_mm)} mm`;
 
     /* hero */
     if (top) {
       const score = top.scores?.final_score;
       const info = rating(score);
       $("heroIcon").textContent = ICONS[top.crop_key] || "🌾";
-      $("heroCrop").textContent = top.crop_name_local || top.crop_name;
+      $("heroCrop").textContent = top.crop_name || top.crop_name_local || "Crop";
       $("heroRating").textContent = `${info.stars} ${info.label}${score != null ? ` • ${num(score)}/100` : ""}`;
       $("heroWhy").textContent = advice.why || top.rationale || "";
     } else {
-      $("heroCrop").textContent = "Öneri bulunamadı";
-      $("heroRating").textContent = "Bilgileri kontrol edip tekrar dene.";
+      $("heroCrop").textContent = "No recommendation found";
+      $("heroRating").textContent = "Check the information and try again.";
       $("heroWhy").textContent = "";
     }
 
+    /* advisor note */
+    renderNote(advice, data);
+
     /* rotation */
     const years = rotation.years || [];
-    $("rotationTitle").innerHTML = `🔁 ${years.length || rotation.years_requested || 3} yıllık ekim planı`;
+    $("rotationYearsLabel").textContent = String(years.length || rotation.years_requested || 3);
     $("rotationSummary").textContent = rotation.summary || "";
     const rotScore = rotation.scores?.overall;
     $("rotationScorePill").textContent = rotScore != null
       ? `${rating(rotScore).label} • ${num(rotScore)}/100`
-      : (rotation.applicable ? "—" : "Uygun değil");
+      : (rotation.applicable ? "—" : "Not applicable");
     $("rotationScorePill").className = `pill${rotScore != null && rotScore < 55 ? " warn" : ""}`;
 
-    renderTimeline(years, rotation);
+    renderTimeline(years, rotation, economics);
     renderBenefits(rotation);
     renderRotationDetails(rotation);
 
@@ -516,6 +538,12 @@
 
     /* water */
     renderWater(water);
+
+    /* money */
+    renderMoney(economics);
+
+    /* risk */
+    renderRisk(risk);
 
     /* climate */
     renderClimate(climateOutlook, climate);
@@ -537,36 +565,57 @@
     restoreChecks(data.plan_id);
   }
 
-  function renderTimeline(years, rotation) {
+  function renderNote(advice, data) {
+    const card = $("noteCard");
+    const text = (advice.commentary || "").trim();
+    if (!text) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    $("noteText").textContent = text;
+    const ai = data.ai || {};
+    const llm = ai.kind === "llm" && !ai.fallback_used;
+    $("noteSource").textContent = llm ? "AI explanation" : "Rule engine";
+    $("noteSource").className = `pill${llm ? "" : " warn"}`;
+  }
+
+  function renderTimeline(years, rotation, economics) {
     const container = $("rotationTimeline");
     if (!rotation.applicable || !years.length) {
       container.innerHTML = `
         <div class="timeline-card">
-          <p class="timeline-crop"><span class="emoji">ℹ️</span><strong>Yıllık ekim nöbeti uygulanmıyor</strong></p>
+          <p class="timeline-crop"><span class="emoji">ℹ️</span><strong>No yearly rotation</strong></p>
           <p class="timeline-benefit">${esc(rotation.summary || "")}</p>
         </div>`;
       return;
     }
+    const profitByYear = {};
+    (economics.years || []).forEach((year) => {
+      profitByYear[year.year] = year.gross_margin_usd;
+    });
     container.innerHTML = years.map((year) => {
       const icon = year.icon || ICONS[year.crop_key] || "🌾";
-      const rain = year.season_rain_mm != null ? ` • yağış ${num(year.season_rain_mm)} mm` : "";
+      const rain = year.season_rain_mm != null ? ` • rain ${num(year.season_rain_mm)} mm` : "";
+      const profit = profitByYear[year.year];
       const actions = (year.actions || []).map((item) => `<li>${esc(item)}</li>`).join("");
       return `
         <div class="timeline-item" data-year="${year.year}">
-          <div class="year-badge">${year.year}.<br>YIL</div>
+          <div class="year-badge">${year.year}.<br>YEAR</div>
           <div class="timeline-card">
             <div class="timeline-crop">
               <span class="emoji" aria-hidden="true">${esc(icon)}</span>
-              <strong>${esc(year.crop_name_local)}</strong>
+              <strong>${esc(year.crop_name || year.crop_name_local || "Crop")}</strong>
             </div>
             <p class="timeline-role">${esc(year.role || year.family_label || "")}</p>
             <div class="timeline-tags">
               <span>🗓️ ${esc(year.planting_window)}</span>
               <span>💧 ${num(year.water_need_mm)} mm${esc(rain)}</span>
+              ${profit != null ? `<span>💰 ${esc(money(profit))}</span>` : ""}
             </div>
             <p class="timeline-benefit">${esc(year.benefit || "")}</p>
             ${year.cover_crop ? `<p class="cover-line">🌱 ${esc(year.cover_crop)}</p>` : ""}
-            ${actions ? `<details><summary>Bu yıl ne yapmalı?</summary><ul>${actions}</ul></details>` : ""}
+            ${actions ? `<details><summary>What should I do this year?</summary><ul>${actions}</ul></details>` : ""}
           </div>
         </div>`;
     }).join("");
@@ -588,14 +637,14 @@
     const container = $("rotationAlternatives");
     if (!alternatives.length) { container.innerHTML = ""; return; }
     container.innerHTML = `
-      <h3 class="subhead">Başka sıralar</h3>
+      <h3 class="subhead">Other sequences</h3>
       <div class="alt-grid">
         ${alternatives.map((alt) => `
           <div class="alt">
             <span class="emoji" aria-hidden="true">🔁</span>
             <div class="alt-body">
               <strong>${esc((alt.crop_names || []).join(" → "))}</strong>
-              <span>Toplam su ihtiyacı ${num(alt.total_water_mm)} mm</span>
+              <span>Total water need ${num(alt.total_water_mm)} mm</span>
             </div>
             <span class="alt-score">${num(alt.scores?.overall)}</span>
           </div>`).join("")}
@@ -605,16 +654,16 @@
   function renderScores(rotation) {
     const grid = $("scoreGrid");
     if (!rotation.scores) {
-      grid.innerHTML = `<p class="hint">${esc(rotation.summary || "Bu tarla için rotasyon puanı hesaplanamadı.")}</p>`;
+      grid.innerHTML = `<p class="hint">${esc(rotation.summary || "A rotation score could not be calculated for this field.")}</p>`;
       return;
     }
     const scores = rotation.scores;
     const rows = [
-      ["Toprak sağlığı", scores.soil_health, "🪨"],
-      ["Su tasarrufu", scores.water, "💧"],
-      ["İklim dayanıklılığı", scores.resilience, "🌦️"],
-      ["Kazanç potansiyeli", scores.profit, "💰"],
-      ["Risk güvenliği", scores.risk, "🛡️"],
+      ["Soil health", scores.soil_health, "🪨"],
+      ["Water saving", scores.water, "💧"],
+      ["Climate resilience", scores.resilience, "🌦️"],
+      ["Profit potential", scores.profit, "💰"],
+      ["Risk safety", scores.risk, "🛡️"],
     ];
     grid.innerHTML = rows.map(([label, value, icon]) => {
       const tone = toneClass(value);
@@ -632,7 +681,7 @@
     const gradeNode = $("soilGrade");
     gradeNode.textContent = grade;
     gradeNode.className = `grade ${String(grade).toLowerCase()}`;
-    gradeNode.setAttribute("aria-label", `Toprak notu ${grade}`);
+    gradeNode.setAttribute("aria-label", `Soil grade ${grade}`);
     $("soilSummary").textContent = soil.summary || "";
     const score = soil.score;
     const bar = $("soilBar");
@@ -644,7 +693,7 @@
     $("soilOutlook").hidden = !soil.outlook;
     $("soilIndicators").innerHTML = (soil.indicators || []).map((item) => {
       const value = item.value != null ? `${num(item.value, 1)} ${esc(item.unit || "")}` : "—";
-      const status = item.status || "bilinmiyor";
+      const status = item.status || "unknown";
       return `
         <div class="indicator">
           <strong>${esc(item.label)}</strong>
@@ -658,10 +707,10 @@
   function renderWater(water) {
     $("waterSummary").textContent = water.summary || "";
     const stats = [
-      ["Bitki ihtiyacı", `${num(water.crop_need_mm)} mm`],
-      ["Yağış", `${num(water.season_rain_mm)} mm`],
-      ["Ek sulama", `${num(water.deficit_mm)} mm`],
-      ["Tarlan için", `${num(water.deficit_m3)} ton`],
+      ["Crop need", `${num(water.crop_need_mm)} mm`],
+      ["Rainfall", `${num(water.season_rain_mm)} mm`],
+      ["Extra irrigation", `${num(water.deficit_mm)} mm`],
+      ["For your field", `${num(water.deficit_m3)} tonnes`],
     ];
     $("waterStats").innerHTML = stats.map(([label, value], index) => `
       <div class="water-stat${index === 2 || index === 3 ? " highlight" : ""}">
@@ -676,7 +725,7 @@
       const et0 = Math.max(0, Number(m.et0_mm) || 0);
       const short = MONTHS_SHORT[index] || m.month;
       return `
-        <div class="month-row" title="${esc(m.month)}: yağış ${num(rain)} mm, buharlaşma ${num(et0)} mm">
+        <div class="month-row" title="${esc(m.month)}: rain ${num(rain)} mm, evaporation ${num(et0)} mm">
           <span class="m">${esc(short)}</span>
           <div class="month-bars-inner">
             <div class="mini-bar"><span style="width:${(rain / max) * 100}%"></span></div>
@@ -689,12 +738,171 @@
     $("waterTips").hidden = !tips.length;
   }
 
+  function renderMoney(economics) {
+    const available = economics && economics.available !== false;
+    const pill = $("moneyPill");
+    $("moneyHeadline").textContent = economics.headline || "";
+    $("moneySummary").textContent = economics.summary || "";
+
+    const margin = economics.total_gross_margin_usd;
+    if (!available || margin == null) {
+      pill.textContent = "No budget";
+      pill.className = "pill warn";
+      $("moneyStats").innerHTML = "";
+      $("moneyRange").hidden = true;
+      $("moneyYears").innerHTML = "";
+      $("moneyCosts").innerHTML = "";
+      $("moneyNotes").innerHTML = "";
+      $("moneyAssumptions").textContent = "";
+      return;
+    }
+
+    const tone = margin >= 1000 ? "" : margin >= 0 ? "warn" : "bad";
+    pill.textContent = margin >= 1000 ? "Strong" : margin >= 0 ? "Thin" : "Negative";
+    pill.className = `pill ${tone}`.trim();
+
+    const stats = [
+      ["Income", money(economics.total_revenue_usd)],
+      ["Cost", money(economics.total_cost_usd)],
+      ["Profit", money(margin)],
+      ["Profit per decare", money(economics.margin_per_decare_usd)],
+    ];
+    $("moneyStats").innerHTML = stats.map(([label, value], index) => `
+      <div class="money-stat${index === 2 ? " highlight" : ""}">
+        <strong>${esc(value)}</strong>
+        <span>${esc(label)}</span>
+      </div>`).join("");
+
+    /* profit range */
+    const low = Number(economics.low_profit_usd);
+    const high = Number(economics.high_profit_usd);
+    if (Number.isFinite(low) && Number.isFinite(high) && high !== low) {
+      const min = Math.min(low, 0, high);
+      const max = Math.max(low, 0, high);
+      const span = max - min || 1;
+      const left = ((low - min) / span) * 100;
+      const width = Math.max(3, ((high - low) / span) * 100);
+      $("moneyRange").hidden = false;
+      $("moneyRangeText").textContent = `${money(low)} to ${money(high)}`;
+      const bar = $("moneyRangeBar");
+      bar.style.left = `${Math.max(0, Math.min(97, left))}%`;
+      bar.style.width = `${Math.min(100, width)}%`;
+      bar.className = high < 0 ? "low" : low < 0 ? "mid" : "good";
+    } else {
+      $("moneyRange").hidden = true;
+    }
+
+    /* per-year money */
+    const moneyYears = economics.years || [];
+    $("moneyYears").innerHTML = moneyYears.length
+      ? moneyYears.map((year) => `
+          <div class="money-year">
+            <span class="money-year-label">Year ${esc(year.year)} · ${esc(year.crop_name)}</span>
+            <span class="money-year-value ${year.gross_margin_usd < 0 ? "low" : "good"}">${esc(money(year.gross_margin_usd))}</span>
+            <span class="money-year-sub">${esc(money(year.margin_per_decare_usd))} / decare</span>
+          </div>`).join("")
+      : `<p class="hint">No yearly breakdown.</p>`;
+
+    /* cost breakdown summed over the plan */
+    const totals = {};
+    (economics.crops || []).forEach((crop) => {
+      (crop.costs || []).forEach((line) => {
+        totals[line.label] = (totals[line.label] || 0) + Number(line.amount_usd || 0);
+      });
+    });
+    const costRows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    $("moneyCosts").innerHTML = costRows.length
+      ? costRows.map(([label, value]) => `
+          <div class="cost-row"><span>${esc(label)}</span><strong>${esc(money(value))}</strong></div>`).join("")
+      : `<p class="hint">No cost detail.</p>`;
+
+    const moneyNotes = [
+      `Break-even price: ${money(economics.break_even_price_usd_per_t, 2)} per tonne.`,
+      `Return on cost (ROI): ${num(economics.roi_pct, 1)}%.`,
+      `Area: ${num(economics.area_hectares, 2)} ha = ${num(economics.area_decare, 0)} decare.`,
+    ].concat(economics.notes || []);
+    $("moneyNotes").innerHTML = readableList(moneyNotes, 8);
+    $("moneyAssumptions").textContent = (economics.assumptions || []).join(" ");
+  }
+
+  function renderRisk(risk) {
+    const pill = $("riskPill");
+    const level = risk.overall_level || "unknown";
+    pill.textContent = `Risk: ${risk.overall_label || "Unknown"}`;
+    pill.className = `pill ${riskTone(level)}`.trim();
+    $("riskSummary").textContent = risk.summary || "";
+
+    const frost = risk.frost || {};
+    const heat = risk.heat || {};
+    const drought = risk.drought || {};
+    const rows = [
+      {
+        icon: "❄️",
+        title: "Frost",
+        info: frost,
+        detail: frost.last_frost_month
+          ? `Last spring frost: ${frost.last_frost_month}. First autumn frost: ${frost.first_frost_month || "—"}.`
+          : "Normal frost risk is low.",
+      },
+      {
+        icon: "🔥",
+        title: "Heat",
+        info: heat,
+        detail: heat.max_temp_c != null
+          ? `Normal maximum: ${num(heat.max_temp_c, 1)} °C.`
+          : "No temperature data.",
+      },
+      {
+        icon: "☀️",
+        title: "Drought",
+        info: drought,
+        detail: `${num(drought.deficit_mm, 0)} mm of extra water may be needed.`,
+      },
+    ];
+    $("riskGrid").innerHTML = rows.map((row) => {
+      const info = row.info || {};
+      return `
+        <div class="risk-card ${riskTone(info.risk_level)}">
+          <div class="risk-head">
+            <span class="risk-icon" aria-hidden="true">${row.icon}</span>
+            <strong>${esc(row.title)}</strong>
+            <span class="risk-level">${esc(info.risk_label || "Unknown")}</span>
+          </div>
+          <div class="risk-meter"><span class="${riskTone(info.risk_level) || "good"}" style="width:${Math.max(2, Math.min(100, Number(info.probability_pct || 0)))}%"></span></div>
+          <p class="risk-detail">${esc(row.detail)}</p>
+        </div>`;
+    }).join("");
+
+    const windowParts = [];
+    if (frost.frost_free_window) {
+      windowParts.push(`❄️ Frost-free window: <strong>${esc(frost.frost_free_window)}</strong>${frost.frost_free_days ? ` (about ${num(frost.frost_free_days)} days)` : ""}.`);
+    }
+    if ((frost.frost_months || []).length) {
+      windowParts.push(`Frost months: ${(frost.frost_months || []).map((m) => esc(m)).join(", ")}.`);
+    }
+    if ((heat.heat_months || []).length) {
+      windowParts.push(`Hot months: ${(heat.heat_months || []).map((m) => esc(m)).join(", ")}.`);
+    }
+    $("frostWindow").innerHTML = windowParts.length
+      ? `<p>${windowParts.join(" ")}</p>`
+      : "";
+    $("frostWindow").hidden = !windowParts.length;
+
+    const tips = [].concat(
+      frost.risk_level !== "low" ? (frost.tips || []).slice(0, 2) : [],
+      heat.risk_level !== "low" ? (heat.tips || []).slice(0, 2) : [],
+      drought.risk_level !== "low" ? (drought.tips || []).slice(0, 2) : []
+    );
+    const actions = (risk.actions || []).concat(tips);
+    $("riskActions").innerHTML = readableList(actions, 8);
+    $("riskNotes").textContent = (risk.notes || []).join(" ");
+  }
+
   function renderClimate(outlook, climate) {
     const risk = $("climateRisk");
     const riskKey = outlook.risk_level || "unknown";
-    const riskText = outlook.risk_label || "Bilinmiyor";
-    risk.textContent = `Risk: ${riskText}`;
-    risk.className = `pill${riskKey === "high" ? " bad" : riskKey === "medium" ? " warn" : ""}`;
+    risk.textContent = `Risk: ${outlook.risk_label || "Unknown"}`;
+    risk.className = `pill ${riskKey === "high" ? "bad" : riskKey === "medium" ? "warn" : ""}`.trim();
 
     const trends = outlook.trends || [];
     $("climateTrends").innerHTML = trends.map((trend) => {
@@ -717,14 +925,14 @@
 
     const dry = outlook.dry_months || [];
     $("climateDry").innerHTML = dry.length
-      ? `☀️ <strong>Kurak aylar:</strong> ${dry.map((month) => esc(month)).join(", ")}. Sulama planını buna göre yap.`
+      ? `☀️ <strong>Dry months:</strong> ${dry.map((month) => esc(month)).join(", ")}. Plan irrigation around them.`
       : "";
     $("climateDry").hidden = !dry.length;
 
     if (outlook.available) {
-      $("climateSource").textContent = `NASA POWER ${outlook.start_year}–${outlook.end_year} (${outlook.available_years} yıl). Eğilim geçmiş verinin yönüdür; tahmin değildir.`;
+      $("climateSource").textContent = `NASA POWER ${outlook.start_year}–${outlook.end_year} (${outlook.available_years} years). The trend is the direction of past data, not a forecast.`;
     } else {
-      $("climateSource").textContent = `Uzun yıllık eğilim verisi alınamadı. Bölge iklimi: ${climateLabel(climate.climate_class)}, yıllık yağış ${num(climate.annual_precip_mm)} mm.`;
+      $("climateSource").textContent = `The long-term trend could not be loaded. Regional climate: ${climateLabel(climate.climate_class)}, annual rain ${num(climate.annual_precip_mm)} mm.`;
     }
   }
 
@@ -732,7 +940,7 @@
     const container = $(id);
     if (!container) return;
     if (!items || !items.length) {
-      container.innerHTML = `<li class="hint">Bu bölüm için ek bilgi yok.</li>`;
+      container.innerHTML = `<li class="hint">No extra information for this section.</li>`;
       return;
     }
     if (mode === "check") {
@@ -749,7 +957,7 @@
   function renderAlternatives(recs) {
     const container = $("alternatives");
     if (!recs.length) {
-      container.innerHTML = `<p class="hint">Başka alternatif yok.</p>`;
+      container.innerHTML = `<p class="hint">No other options.</p>`;
       return;
     }
     container.innerHTML = recs.map((rec) => {
@@ -758,8 +966,8 @@
         <div class="alt">
           <span class="emoji" aria-hidden="true">${ICONS[rec.crop_key] || "🌾"}</span>
           <div class="alt-body">
-            <strong>${esc(rec.crop_name_local)}</strong>
-            <span>${esc(rec.planting_window)} • ${num(rec.water_need_mm)} mm su</span>
+            <strong>${esc(rec.crop_name || rec.crop_name_local || "Crop")}</strong>
+            <span>${esc(rec.planting_window)} • ${num(rec.water_need_mm)} mm water</span>
           </div>
           <span class="alt-score">${rating(score).label}</span>
         </div>`;
@@ -769,26 +977,26 @@
   function renderTech(data, env, climate, outlook) {
     const soil = env.soil || {};
     const tech = [
-      ["Ortalama sıcaklık", `${num(climate.annual_mean_temp_c, 1)} °C`],
-      ["Yıllık yağış", `${num(climate.annual_precip_mm)} mm`],
-      ["İklim sınıfı", climateLabel(climate.climate_class)],
-      ["Toprak nemi (NASA)", num(soil.root_zone_moisture_mean, 2)],
-      ["Toprak sıcaklığı", `${num(soil.mean_soil_temp_c, 1)} °C`],
-      ["Eğilim dönemi", outlook.available ? `${outlook.start_year}–${outlook.end_year}` : "yok"],
-      ["AI açıklama", data.ai?.kind === "llm" ? "dil modeli" : "kural motoru"],
+      ["Mean temperature", `${num(climate.annual_mean_temp_c, 1)} °C`],
+      ["Annual rainfall", `${num(climate.annual_precip_mm)} mm`],
+      ["Climate class", climateLabel(climate.climate_class)],
+      ["Soil moisture (NASA)", num(soil.root_zone_moisture_mean, 2)],
+      ["Soil temperature", `${num(soil.mean_soil_temp_c, 1)} °C`],
+      ["Trend period", outlook.available ? `${outlook.start_year}–${outlook.end_year}` : "none"],
+      ["Explanation", data.ai?.kind === "llm" && !data.ai?.fallback_used ? "language model" : "rule engine"],
       ["Plan no", String(data.plan_id || "").slice(0, 10)],
     ];
     $("techDetails").innerHTML = `
       <div class="tech-grid">
         ${tech.map(([label, value]) => `<div class="tech-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")}
       </div>
-      <h3 class="subhead">Veri kaynakları</h3>
+      <h3 class="subhead">Data sources</h3>
       <ul class="ticks">
         ${(data.data_sources || []).map((source) => `<li><strong>${esc(source.name)}</strong> — ${esc(source.description)}</li>`).join("")}
       </ul>`;
     const warnings = data.warnings || [];
     $("techWarnings").innerHTML = warnings.length
-      ? `<strong>Uyarılar:</strong><br>${warnings.map((warning) => `• ${esc(warning)}`).join("<br>")}`
+      ? `<strong>Warnings:</strong><br>${warnings.map((warning) => `• ${esc(warning)}`).join("<br>")}`
       : "";
   }
 
@@ -820,46 +1028,50 @@
     const rotation = data.rotation || {};
     const soil = data.soil_health || {};
     const water = data.water || {};
+    const economics = data.economics || {};
+    const risk = data.risk || {};
     const parts = [
       advice.headline || "",
-      advice.why || "",
+      advice.commentary || advice.why || "",
       rotation.summary || "",
       soil.summary || "",
       water.summary || "",
+      economics.summary || "",
+      risk.summary || "",
       (advice.steps || []).slice(0, 3).join(" "),
-      "Bu bir karar destek aracıdır. Ekimden önce toprak analizi yaptır ve yerel tarım uzmanına danış.",
+      "This is decision support. Before planting, get a soil test and talk to your local extension service.",
     ];
     return parts.filter(Boolean).join(" ");
   }
   function toggleSpeech() {
     if (!("speechSynthesis" in window)) {
-      toast("Tarayıcın sesli okumayı desteklemiyor.");
+      toast("Your browser does not support speech.");
       return;
     }
     if (state.speaking) {
       window.speechSynthesis.cancel();
       state.speaking = false;
-      $("listenBtn").textContent = "🔊 Dinle";
+      $("listenBtn").textContent = "🔊 Listen";
       return;
     }
     const text = spokenSummary();
     if (!text) return;
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "tr-TR";
+    utterance.lang = "en-US";
     utterance.rate = 0.92;
     utterance.pitch = 1;
     utterance.onend = () => {
       state.speaking = false;
-      $("listenBtn").textContent = "🔊 Dinle";
+      $("listenBtn").textContent = "🔊 Listen";
     };
     utterance.onerror = () => {
       state.speaking = false;
-      $("listenBtn").textContent = "🔊 Dinle";
+      $("listenBtn").textContent = "🔊 Listen";
     };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
     state.speaking = true;
-    $("listenBtn").textContent = "⏹ Durdur";
+    $("listenBtn").textContent = "⏹ Stop";
   }
 
   /* ------------------------------------------------------------- share/print */
@@ -868,7 +1080,7 @@
     if (!data) return;
     const text = spokenSummary();
     const shareData = {
-      title: "Tarla Dostu — ekim planım",
+      title: "FieldWise — my crop plan",
       text: text.slice(0, 800),
       url: window.location.href,
     };
@@ -877,9 +1089,9 @@
     }
     try {
       await navigator.clipboard.writeText(text);
-      toast("Plan metni kopyalandı.");
+      toast("Plan text copied.");
     } catch (error) {
-      toast("Paylaşım bu tarayıcıda çalışmadı.");
+      toast("Sharing did not work in this browser.");
     }
   }
   function downloadJson() {
@@ -889,7 +1101,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `tarla-plani-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `field-plan-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -923,7 +1135,7 @@
     $("applyCoords").addEventListener("click", () => {
       const lat = numOrNull($("latInput").value);
       const lon = numOrNull($("lonInput").value);
-      if (lat == null || lon == null) { toast("Enlem ve boylamı gir."); return; }
+      if (lat == null || lon == null) { toast("Enter latitude and longitude."); return; }
       setLocation(lat, lon, { zoomLevel: 13, reverse: true });
     });
 
@@ -976,7 +1188,7 @@
       const big = document.documentElement.classList.toggle("big-text");
       localStorage.setItem(TEXT_KEY, big ? "1" : "0");
       $("textToggle").textContent = big ? "A−" : "A+";
-      $("textToggle").setAttribute("aria-label", big ? "Yazıyı küçült" : "Yazıyı büyüt");
+      $("textToggle").setAttribute("aria-label", big ? "Make text smaller" : "Make text bigger");
       setTimeout(() => { if (state.map) state.map.invalidateSize(); }, 200);
     });
 
@@ -1014,7 +1226,7 @@
     state.lon = lon;
     $("latInput").value = lat.toFixed(5);
     $("lonInput").value = lon.toFixed(5);
-    $("placeName").textContent = `Seçilen nokta: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    $("placeName").textContent = `Selected point: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     startWizard();
     setTimeout(() => setLocation(lat, lon, { zoomLevel: 13, reverse: true }), 220);
     return true;

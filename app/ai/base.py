@@ -98,7 +98,7 @@ class AIProvider(ABC):
         """
 
         raise AIProviderError(
-            f"{self.name} sağlayıcısı serbest metin önerisini desteklemiyor."
+            f"Provider {self.name} does not support the free-text advice flow."
         )
 
     async def aclose(self) -> None:  # pragma: no cover - trivial default
@@ -247,7 +247,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
     """Extract the first JSON object from an LLM response."""
 
     if not text or not text.strip():
-        raise AIProviderError("AI sağlayıcısı boş yanıt döndürdü.")
+        raise AIProviderError("The AI provider returned an empty response.")
 
     cleaned = text.strip()
     if cleaned.startswith("```"):
@@ -257,13 +257,13 @@ def extract_json_object(text: str) -> dict[str, Any]:
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        raise AIProviderError("AI yanıtında JSON nesnesi bulunamadı.")
+        raise AIProviderError("No JSON object was found in the AI response.")
     try:
         payload = json.loads(cleaned[start : end + 1])
     except json.JSONDecodeError as exc:
-        raise AIProviderError(f"AI yanıtı geçerli JSON değil: {exc.msg}") from exc
+        raise AIProviderError(f"The AI response is not valid JSON: {exc.msg}") from exc
     if not isinstance(payload, dict):
-        raise AIProviderError("AI yanıtı JSON nesnesi değil.")
+        raise AIProviderError("The AI response is not a JSON object.")
     return payload
 
 
@@ -278,7 +278,7 @@ def parse_analysis(text: str, allowed_crop_keys: set[str] | None = None) -> AIAn
 # Free-text advice ("ne ekeyim?") context, prompt and parser
 # ---------------------------------------------------------------------------
 class AdviceContext(BaseModel):
-    """Çiftçinin serbest metni + NASA özeti + kural motoru adayları."""
+    """Farmer free text + NASA summary + rule-engine candidates."""
 
     language: str
     location: dict[str, Any]
@@ -287,6 +287,8 @@ class AdviceContext(BaseModel):
     candidates: list[dict[str, Any]]
     free_text: str = ""
     data_quality: list[str] = Field(default_factory=list)
+    economics: dict[str, Any] = Field(default_factory=dict)
+    risk: dict[str, Any] = Field(default_factory=dict)
 
 
 ADVICE_SYSTEM_PROMPT_TR = """Sen deneyimli bir tarım danışmanısın. Karşındaki kişi çiftçi ve
@@ -324,11 +326,18 @@ Hard rules:
 5. Only recommend crops from the candidate list; never invent a crop_key.
 6. Say "ask your local extension service" when unsure.
 7. Return valid JSON only. No markdown or code fences.
-8. Be brief: max 5 items per list, max 2 sentences per item."""
+8. Be brief: max 5 items per list, max 2 sentences per item.
+9. The context includes `economics` and `risk` with pre-calculated numbers. Use them in
+   `commentary`; explain profit, cost, break-even and frost/heat/drought risk in very
+   simple words. Never invent a different price, yield or probability."""
 
 ADVICE_OUTPUT_SCHEMA = {
     "headline": "one short sentence: what to plant and why (max 15 words)",
     "why": "2-3 short sentences using only the provided data",
+    "commentary": (
+        "3-5 short sentences that combine the money outlook (profit, cost, break-even) "
+        "and the frost/heat/drought risk into one plain-English advisor note"
+    ),
     "steps": ["4-5 first actions, one short sentence each"],
     "grow": ["how to establish the crop: soil prep, sowing, timing"],
     "feed": ["fertilisation in plain language; say a soil test is needed"],
@@ -356,7 +365,7 @@ def build_advice_messages(context: AdviceContext) -> tuple[str, str]:
 
 
 def parse_advice(text: str, allowed_crop_keys: set[str] | None = None) -> AdvicePlan:
-    """AI cevabını doğrular; uydurulmuş bitki adlarını ayıklar."""
+    """Validate the AI answer and remove crop names that were not offered."""
 
     raw = extract_json_object(text)
     plan = AdvicePlan.model_validate(raw)
@@ -365,7 +374,10 @@ def parse_advice(text: str, allowed_crop_keys: set[str] | None = None) -> Advice
         allowed_names = {key.lower() for key in allowed_crop_keys}
         banned = _find_forbidden_crop(raw, allowed_names)
         if banned:
-            plan.risks = [*plan.risks, f"Doğrulanamayan bitki adı ayıklandı: {', '.join(banned)}"]
+            plan.risks = [
+                *plan.risks,
+                f"Unverified crop name removed: {', '.join(banned)}",
+            ]
     return plan
 
 

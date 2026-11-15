@@ -1,4 +1,4 @@
-/* Tarla Dostu service worker — app shell only.
+/* FieldWise service worker — app shell only.
  *
  * Strategy:
  *   - Static shell (HTML/CSS/JS/icons/manifest): cache-first, updated in place.
@@ -8,7 +8,7 @@
  */
 "use strict";
 
-const VERSION = "tarladostu-v1";
+const VERSION = "fieldwise-v2";
 const SHELL = `${VERSION}-shell`;
 const VENDOR = `${VERSION}-vendor`;
 

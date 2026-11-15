@@ -44,8 +44,8 @@ class ClimateOutlook:
     recent_temp_c: float | None = None
     baseline_precip_mm: float | None = None
     recent_precip_mm: float | None = None
-    risk_level: str = "bilinmiyor"
-    risk_label: str = "Bilinmiyor"
+    risk_level: str = "unknown"
+    risk_label: str = "Unknown"
     trends: list[ClimateTrend] = field(default_factory=list)
     messages: list[str] = field(default_factory=list)
     dry_months: list[str] = field(default_factory=list)
@@ -116,12 +116,12 @@ def _dry_months(environment: EnvironmentSnapshot) -> list[str]:
 def _empty_outlook(environment: EnvironmentSnapshot, reason: str) -> ClimateOutlook:
     return ClimateOutlook(
         available=False,
-        risk_level="bilinmiyor",
-        risk_label="Veri yok",
+        risk_level="unknown",
+        risk_label="No data",
         dry_months=_dry_months(environment),
         messages=[
-            "Uzun yıllık sıcaklık/yağış eğilimi şu an alınamadı; plan iklim ortalamasına dayanıyor.",
-            "Bu bir tahmin değildir. Yerel meteoroloji ve tarım müdürlüğü uyarılarını takip et.",
+            "The long-term temperature/rainfall trend could not be loaded; the plan uses the climate average.",
+            "This is not a forecast. Follow local meteorological and extension-service warnings.",
         ],
         notes=[reason],
     )
@@ -138,7 +138,7 @@ def build_outlook_from_annual(
     if len(temps) < MIN_YEARS or len(precip) < MIN_YEARS:
         return _empty_outlook(
             environment,
-            f"Yeterli yıllık veri yok (sıcaklık {len(temps)}, yağış {len(precip)} yıl).",
+            f"Not enough annual data (temperature {len(temps)}, rainfall {len(precip)} years).",
         )
 
     years = [year for year, _ in temps]
@@ -162,56 +162,56 @@ def build_outlook_from_annual(
     trends.append(
         ClimateTrend(
             key="temperature",
-            label="Ortalama sıcaklık",
+            label="Mean temperature",
             direction=temp_direction,
             change=round(temp_change, 2),
             per_decade=round(temp_slope * 10.0, 2),
             unit="°C",
             message=(
-                f"Son {end_year - start_year + 1} yılda ortalama sıcaklık "
-                f"{temp_change:+.1f}°C değişti (10 yılda {temp_slope * 10.0:+.1f}°C)."
+                f"In the last {end_year - start_year + 1} years mean temperature changed by "
+                f"{temp_change:+.1f}°C ({temp_slope * 10.0:+.1f}°C per decade)."
             ),
         )
     )
     if temp_direction == "up":
         messages.append(
-            f"Hava ısınıyor: son {end_year - start_year + 1} yılda ortalama sıcaklık "
-            f"{temp_change:+.1f}°C arttı. Sıcağa dayanıklı çeşit ve erken ekim önemli."
+            f"The climate is warming: mean temperature rose {temp_change:+.1f}°C in the last "
+            f"{end_year - start_year + 1} years. Heat-tolerant varieties and earlier sowing matter."
         )
     elif temp_direction == "down":
         messages.append(
-            f"Ortalama sıcaklık {temp_change:+.1f}°C azaldı. Don riskini ekim takviminde hesaba kat."
+            f"Mean temperature fell {temp_change:+.1f}°C. Account for frost risk in the sowing calendar."
         )
     else:
-        messages.append("Ortalama sıcaklıkta belirgin bir eğilim yok.")
+        messages.append("There is no clear trend in mean temperature.")
 
     precip_direction = _direction(precip_change, max(10.0, (baseline_precip or 0) * 0.03))
     trends.append(
         ClimateTrend(
             key="precipitation",
-            label="Yıllık yağış",
+            label="Annual rainfall",
             direction=precip_direction,
             change=round(precip_change, 1),
             per_decade=round(precip_slope * 10.0, 1),
             unit="mm",
             message=(
-                f"Yıllık yağış {precip_change:+.0f} mm ({precip_percent:+.0f}%) değişti; "
-                f"10 yılda {precip_slope * 10.0:+.0f} mm."
+                f"Annual rainfall changed by {precip_change:+.0f} mm ({precip_percent:+.0f}%); "
+                f"about {precip_slope * 10.0:+.0f} mm per decade."
             ),
         )
     )
     if precip_direction == "down":
         messages.append(
-            f"Yağış azalma eğiliminde ({precip_percent:+.0f}%). Su hasadı, malç ve kuraklığa "
-            "dayanıklı ürünler öne çıkıyor."
+            f"Rainfall is falling ({precip_percent:+.0f}%). Water harvesting, mulch and "
+            "drought-tolerant crops become more important."
         )
     elif precip_direction == "up":
         messages.append(
-            f"Yağış artma eğiliminde ({precip_percent:+.0f}%). Yine de yağışın zamanı değişebilir; "
-            "drenaj ve hastalık takibi önemli."
+            f"Rainfall is rising ({precip_percent:+.0f}%). The timing can still change; "
+            "drainage and disease monitoring matter."
         )
     else:
-        messages.append("Yıllık yağışta belirgin bir eğilim yok; yıl içi dağılım değişebilir.")
+        messages.append("There is no clear annual rainfall trend; the within-year distribution can change.")
 
     if len(tmin) >= MIN_YEARS:
         tmin_slope = _slope(tmin)
@@ -219,14 +219,14 @@ def build_outlook_from_annual(
         trends.append(
             ClimateTrend(
                 key="cold",
-                label="Kışın en düşük sıcaklık ortalaması",
+                label="Cold-season minimum temperature",
                 direction=_direction(tmin_change, 0.2),
                 change=round(tmin_change, 2),
                 per_decade=round(tmin_slope * 10.0, 2),
                 unit="°C",
                 message=(
-                    f"Yıllık ortalama en düşük sıcaklık {tmin_change:+.1f}°C değişti. "
-                    "Don tarihleri kayabilir; yerel don takvimini güncel tut."
+                    f"Mean annual minimum temperature changed by {tmin_change:+.1f}°C. "
+                    "Frost dates can shift; keep the local frost calendar up to date."
                 ),
             )
         )
@@ -250,11 +250,11 @@ def build_outlook_from_annual(
         risk_score += 1
 
     if risk_score >= 3:
-        risk_level, risk_label = "high", "Yüksek"
+        risk_level, risk_label = "high", "High"
     elif risk_score >= 1:
-        risk_level, risk_label = "medium", "Orta"
+        risk_level, risk_label = "medium", "Medium"
     else:
-        risk_level, risk_label = "low", "Düşük"
+        risk_level, risk_label = "low", "Low"
 
     warmest_year = max(temps, key=lambda item: item[1])[0]
     driest_year = min(precip, key=lambda item: item[1])[0]
@@ -276,9 +276,9 @@ def build_outlook_from_annual(
         warmest_year=warmest_year,
         driest_year=driest_year,
         notes=[
-            f"NASA POWER aylık verisi yıllıklaştırıldı ({start_year}-{end_year}, {len(temps)} yıl).",
-            "Eğilim, geçmiş verinin doğrusal yönüdür; gelecek tahmini veya resmî iklim projeksiyonu değildir.",
-            "Kısa dönemde tek bir yıl eğilimin tersine gidebilir. Karar verirken yerel gözlemi de kullan.",
+            f"NASA POWER monthly data was aggregated to years ({start_year}-{end_year}, {len(temps)} years).",
+            "The trend is the linear direction of past data; it is not a forecast or an official climate projection.",
+            "A single year can move against the trend. Use local observation when deciding.",
         ],
     )
 
@@ -291,13 +291,13 @@ async def build_climate_outlook(
 ) -> ClimateOutlook:
     get_annual = getattr(nasa_client, "get_annual", None)
     if get_annual is None:
-        return _empty_outlook(environment, "NASA istemcisi yıllık veri desteklemiyor.")
+        return _empty_outlook(environment, "The NASA client does not support annual data.")
     try:
         annual = await get_annual(latitude, longitude)
     except NASAAPIError as exc:
-        logger.info("Yıllık NASA verisi alınamadı: %s", exc)
-        return _empty_outlook(environment, f"NASA yıllık verisi alınamadı: {exc}")
+        logger.info("Annual NASA data could not be loaded: %s", exc)
+        return _empty_outlook(environment, f"Annual NASA data could not be loaded: {exc}")
     except Exception as exc:  # noqa: BLE001 - outlook must never break the plan
-        logger.warning("İklim eğilimi hesaplanamadı: %s", exc, exc_info=True)
-        return _empty_outlook(environment, "İklim eğilimi hesaplanırken beklenmeyen hata oluştu.")
+        logger.warning("Climate trend could not be calculated: %s", exc, exc_info=True)
+        return _empty_outlook(environment, "Unexpected error while calculating the climate trend.")
     return build_outlook_from_annual(annual, environment)
