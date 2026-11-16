@@ -1,536 +1,533 @@
-# Project Alphecca — Teknik Rapor
+# Project Alphecca — Technical Report
 
-**Tarih:** 15 Kasım 2026  
-**Kapsam:** Python/FastAPI backend, NASA POWER entegrasyonu, açıklanabilir agronomi motoru, çok yıllık ekim nöbeti, toprak/su/iklim modülleri, çiftçi PWA'sı, değiştirilebilir AI katmanı, testler ve değerlendirme.  
-**Durum:** Çalışır backend + çiftçi web uygulaması (`/app/`) + otomatik testler + canlı NASA doğrulaması.
+**Date:** November 15, 2026  
+**Scope:** Python/FastAPI backend, NASA POWER integration, explainable agronomy engine, multi-year crop rotation, soil/water/climate modules, farmer PWA, swappable AI layer, tests, and evaluation.  
+**Status:** Working backend + farmer web application (`/app/`) + automated tests + live NASA validation.
 
-> **Sürüm 0.2.0 notu (15 Kasım 2026):** Bu raporun ilk sürümü yalnızca backend'i kapsıyordu. Bu sürümde
-> telefonda kullanılabilen sade Türkçe PWA (`web/`), 2–4 yıllık ekim nöbeti motoru, 9 göstergeli toprak
-> karnesi, aylık su dengesi (ton/m³), 2001–bugün iklim eğilimi ve 5 yeni ürün (toplam 21) eklendi.
-> Güncel uçlar ve dağıtım için [README.md](README.md), değişiklikler için [CHANGELOG.md](CHANGELOG.md).
+> **Version 0.2.0 note (November 15, 2026):** The first version of this report covered only the backend. This version adds the phone-friendly plain-Turkish PWA (`web/`), a 2–4 year crop rotation engine, a 9-indicator soil scorecard, monthly water balance (tons/m³), a 2001–present climate trend, and 5 new crops (21 total). For current endpoints and deployment see [README.md](README.md), for changes see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## 1. Yönetici özeti
+## 1. Executive summary
 
-Project Alphecca, bir çiftçinin konum ve tarla bilgilerini alıp NASA POWER iklim/toprak verisiyle birleştiren, 21 ekin arasından açıklanabilir bir puanlama yapan ve sonucu bir LLM ile gerekçelendiren bir karar destek uygulamasıdır. Çiftçi arayüzü `web/` altındaki PWA'dır; Streamlit uzman/test modu olarak korunur.
+Project Alphecca is a decision-support application that takes a farmer's location and field information, combines it with NASA POWER climate/soil data, produces an explainable score across 21 crops, and justifies the result with an LLM. The farmer interface is the PWA under `web/`; Streamlit is kept as an expert/test mode.
 
-Teknik olarak en önemli karar şudur: **AI'ı tek başına "ekin seçici" yapmadım.** LLM'ler agronomik hesabı güvenilir biçimde yapamaz, olmayan toprak verisini uydurabilir ve her çağrıda farklı sonuç verebilir. Bu nedenle:
+The most important technical decision is this: **I did not make AI the sole "crop selector."** LLMs cannot reliably perform agronomic calculations, may fabricate soil data that does not exist, and can give different results on every call. Therefore:
 
-- Deterministik kural motoru **çıpanın %65'i**,
-- LLM **açıklama ve yeniden değerlendirmenin %35'i**,
-- LLM çökerse veya anahtar yoksa **tamamen çalışan deterministik yedek**,
-- LLM yalnızca aday listesindeki ekinleri kullanabilir; JSON şeması ve `crop_key` allowlist'i ile sınırlandırılır.
+- The deterministic rule engine is **65% of the anchor**,
+- The LLM is **35% of the explanation and reassessment**,
+- If the LLM fails or there is no key, a **fully functional deterministic fallback**,
+- The LLM may only use crops from the candidate list; it is constrained by a JSON schema and a `crop_key` allowlist.
 
-Canlı doğrulamada Ankara (39.93, 32.85) için NASA POWER'dan 418.2 mm yıllık yağış, 10.31 °C ortalama sıcaklık ve `semi_arid` sınıfı alındı; ilk analiz ~2.4 s, cache'li analiz ~2 ms sürdü. Öneri sıralaması Kışlık Buğday → Arpa → Üzüm → Nohut → Kanola oldu (girdilere göre değişir).
+In live validation for Ankara (39.93, 32.85), NASA POWER returned 418.2 mm annual precipitation, 10.31 °C mean temperature, and the `semi_arid` class; the first analysis took ~2.4 s, the cached analysis ~2 ms. Recommendation order was Winter Wheat → Barley → Grape → Chickpea → Canola (varies with inputs).
 
-**En kritik uyarı:** NASA POWER toprak verimliliği (N-P-K), pH veya organik madde sağlamaz. "NASA API'leriyle toprak verimliliğini çekmek" planın en büyük teknik yanılgısıydı; bu projede pH/organik madde/tuzluluk çiftçi girdisi olarak alınır ve eksikse açıkça uyarılır. Ayrıntılar Bölüm 8'de.
+**Most critical caveat:** NASA POWER does not provide soil fertility (N-P-K), pH, or organic matter. "Pulling soil fertility from NASA APIs" was the biggest technical misconception in the plan; in this project pH/organic matter/salinity are taken as farmer input and explicitly warned about when missing. Details in Section 8.
 
 ---
 
-## 2. Ne teslim edildi?
+## 2. What was delivered?
 
-### 2.1. Çalışan akış
+### 2.1. Working flow
 
 ```text
-Çiftçi isteği (lat/lon + tarla + kaynaklar + tercihler)
+Farmer request (lat/lon + field + resources + preferences)
         │
         ▼
 NASA POWER
-  ├─ Climatology (2001-2025, aylık)  → iklim + toprak nemi/sıcaklığı
-  └─ Daily (son 30 gün)              → güncel bağlam (opsiyonel, hata olursa devam)
+  ├─ Climatology (2001-2025, monthly)  → climate + soil moisture/temperature
+  └─ Daily (last 30 days)              → current context (optional, continue on error)
         │
         ▼
-Agronomi katmanı
-  ├─ yıllık yağış/sıcaklık, ET0 (Hargreaves), kuraklık sınıfı
-  ├─ don ve sıcak stresi ayları
-  ├─ toprak nemi/sıcaklığı ve koşul puanı
-  └─ son 30 gün: yağış, kuraklık aralığı, min/max sıcaklık
+Agronomy layer
+  ├─ annual precipitation/temperature, ET0 (Hargreaves), aridity class
+  ├─ frost and heat stress months
+  ├─ soil moisture/temperature and condition score
+  └─ last 30 days: precipitation, dry spell, min/max temperature
         │
         ▼
-Kural motoru (21 ekin)
-  ├─ sezonluk sıcaklık, su dengesi, pH, doku, tuzluluk
-  ├─ iklim riski, hedef uyumu, pazar, ekim takvimi
-  └─ 0-100 rule_score + bileşen kırılımı + kısıtlar
+Rule engine (21 crops)
+  ├─ seasonal temperature, water balance, pH, texture, salinity
+  ├─ climate risk, goal fit, market, planting calendar
+  └─ 0-100 rule_score + component breakdown + constraints
         │
         ▼
-AI katmanı (opsiyonel)
+AI layer (optional)
   ├─ Gemini / OpenAI / Claude / Groq / Mistral / DeepSeek / Ollama
-  ├─ yalnızca aday crop_key'leri; JSON şema doğrulaması
-  └─ hata/anahtar yoksa deterministik HeuristicProvider
+  ├─ only candidate crop_keys; JSON schema validation
+  └─ if error/no key, deterministic HeuristicProvider
         │
         ▼
-Birleştirme
+Merge
   final_score = 0.65 × rule_score + 0.35 × ai_score
         │
         ▼
-JSON yanıt: sıralı öneriler + gerekçe + risk + aksiyon + uyarı + kaynak + disclaimer
+JSON response: ranked recommendations + rationale + risk + action + warning + source + disclaimer
 ```
 
-**Serbest metinli çiftçi akışı (`/api/v1/advice`)** aynı hattın kısaltılmış halidir:
+The **free-text farmer flow (`/api/v1/advice`)** is a shortened version of the same pipeline:
 
 ```text
-Çiftçi: harita + 3 basit soru + "ne ekeceğimi bilmiyorum" yazısı
+Farmer: map + 3 simple questions + the text "I don't know what to plant"
         │
         ▼
-NASA POWER → agronomi katmanı → kural motoru (sıralama buradan gelir)
+NASA POWER → agronomy layer → rule engine (ranking comes from here)
         │
         ▼
-AI (varsa) → yalnızca AÇIKLAMA: headline, why, steps, grow, feed, care, risks, ask_farmer
-        │     AI yoksa/hata verirse aynı yapı deterministik şablonla üretilir
+AI (if available) → EXPLANATION ONLY: headline, why, steps, grow, feed, care, risks, ask_farmer
+        │     if AI is absent/fails, the same structure is produced with a deterministic template
         ▼
-JSON: final_score == rule_score (AI sıralamayı değiştiremez)
+JSON: final_score == rule_score (AI cannot change the ranking)
 ```
 
-### 2.2. Dosyalar
+### 2.2. Files
 
-| Dosya | Görev |
+| File | Purpose |
 |---|---|
-| `app/main.py` | FastAPI app factory, CORS, request ID, hata yönetimi, health, `/geo` konum sayfası |
-| `app/config.py` | `.env`/ortam değişkenleri, AI, NASA ve geocoding ayarları |
-| `app/schemas.py` | Tüm istek/yanıt sözleşmeleri, doğrulama |
+| `app/main.py` | FastAPI app factory, CORS, request ID, error handling, health, `/geo` location page |
+| `app/config.py` | `.env`/environment variables, AI, NASA, and geocoding settings |
+| `app/schemas.py` | All request/response contracts, validation |
 | `app/api/routes.py` | `/analyze`, `/advice`, `/environment`, `/reverse-geocode`, `/crops`, `/ai-providers` |
-| `app/clients/nasa_power.py` | NASA istemcisi, `-999` temizliği, TTL cache, retry |
-| `app/clients/geocoding.py` | Nominatim ters coğrafi kodlama, TTL cache, User-Agent |
-| `app/services/agronomy.py` | NASA verisinden iklim/toprak özeti, ET0, sezon metrikleri |
-| `app/domain/crops.py` | 21 ekin, TR/EN alias, katalog doğrulaması |
-| `app/domain/scoring.py` | Açıklanabilir puanlama ve sert agronomik limitler |
-| `app/services/recommendation.py` | Ortak NASA + kural hattı (`prepare`), `/analyze` orkestrasyonu |
-| `app/services/advice.py` | Serbest metinli çiftçi akışı: kural sıralaması + sade dilli açıklama |
-| `app/ai/*` | Sağlayıcı soyutlaması, prompt, JSON ayrıştırma, fallback |
-| `ui/app.py` | Streamlit arayüzü: harita, çiftçi akışı, detay kutusu, uzman modu |
-| `tests/*` | 62 test; NASA ve LLM mock'lu |
-| `README.md` | Kurulum, API, örnekler |
-| `RAPOR.md` | Bu rapor |
+| `app/clients/nasa_power.py` | NASA client, `-999` cleanup, TTL cache, retry |
+| `app/clients/geocoding.py` | Nominatim reverse geocoding, TTL cache, User-Agent |
+| `app/services/agronomy.py` | Climate/soil summary from NASA data, ET0, seasonal metrics |
+| `app/domain/crops.py` | 21 crops, TR/EN aliases, catalog validation |
+| `app/domain/scoring.py` | Explainable scoring and hard agronomic limits |
+| `app/services/recommendation.py` | Shared NASA + rule pipeline (`prepare`), `/analyze` orchestration |
+| `app/services/advice.py` | Free-text farmer flow: rule ranking + plain-language explanation |
+| `app/ai/*` | Provider abstraction, prompt, JSON parsing, fallback |
+| `ui/app.py` | Streamlit interface: map, farmer flow, detail box, expert mode |
+| `tests/*` | 62 tests; NASA and LLM mocked |
+| `README.md` | Setup, API, examples |
+| `RAPOR.md` | This report |
 
-### 2.3. API uç noktaları
+### 2.3. API endpoints
 
-- `POST /api/v1/analyze` — tam analiz
-- `POST /api/v1/advice` — serbest metinli çiftçi sorusuna sade dilli plan
-- `GET /api/v1/environment` — NASA özeti (öneri olmadan)
-- `GET /api/v1/reverse-geocode` — koordinat → yer adı (Nominatim)
-- `GET /api/v1/crops` — ekin kataloğu
-- `GET /api/v1/ai-providers` — AI karşılaştırması
-- `GET /geo` — tarayıcı konum izni sayfası
-- `GET /health` — sağlık, AI sağlayıcısı, geocoding, cache
-- `GET /docs` — Swagger (geçici test UI'ı)
+- `POST /api/v1/analyze` — full analysis
+- `POST /api/v1/advice` — plain-language plan for a free-text farmer question
+- `GET /api/v1/environment` — NASA summary (without recommendations)
+- `GET /api/v1/reverse-geocode` — coordinates → place name (Nominatim)
+- `GET /api/v1/crops` — crop catalog
+- `GET /api/v1/ai-providers` — AI comparison
+- `GET /geo` — browser location permission page
+- `GET /health` — health, AI provider, geocoding, cache
+- `GET /docs` — Swagger (temporary test UI)
 
-Hata sözleşmesi: `422` doğrulama/uygun ekin yok, `502` NASA erişilemez, `503` AI erişilemez ve fallback kapalı.
+Error contract: `422` validation/no suitable crop, `502` NASA unreachable, `503` AI unreachable and fallback disabled.
 
 ---
 
-## 3. NASA POWER entegrasyonu
+## 3. NASA POWER integration
 
-### 3.1. Kullanılan servisler
+### 3.1. Services used
 
-| Servis | Amaç |
+| Service | Purpose |
 |---|---|
-| `GET /api/temporal/climatology/point` | 2001-2025 aylık iklim ve toprak nemi/sıcaklığı ortalamaları |
-| `GET /api/temporal/daily/point` | Son 30 günün günlük sıcaklık, yağış, toprak nemi |
+| `GET /api/temporal/climatology/point` | 2001-2025 monthly climate and soil moisture/temperature averages |
+| `GET /api/temporal/daily/point` | Daily temperature, precipitation, soil moisture for the last 30 days |
 
-İstekler `community=AG`, `format=JSON` ve WGS84 koordinatlarla yapılır. `-999.0` dolgu değerleri `None`'a çevrilir; eksik günler hesaplamalara sokulmaz.
+Requests use `community=AG`, `format=JSON`, and WGS84 coordinates. `-999.0` fill values are converted to `None`; missing days are excluded from calculations.
 
-### 3.2. Kullanılan parametreler
+### 3.2. Parameters used
 
-| Parametre | Açıklama | Kullanım |
+| Parameter | Description | Use |
 |---|---|---|
-| `T2M` | 2 m ortalama sıcaklık | Sezon sıcaklığı, iklim özeti |
-| `T2M_MAX` / `T2M_MIN` | Günlük max/min sıcaklık | Don ve sıcak stresi |
-| `PRECTOTCORR` | Düzeltilmiş yağış | Su dengesi, kuraklık |
-| `RH2M` | Bağıl nem | Bilgi amaçlı |
-| `ALLSKY_SFC_SW_DWN` | Güneş radyasyonu | Bilgi amaçlı |
-| `WS2M` | Rüzgar | Bilgi amaçlı |
-| `GWETROOT` / `GWETTOP` | Kök bölgesi / üst toprak nemi | Toprak koşul puanı, kuraklık |
-| `TS` | Toprak sıcaklığı | Toprak koşul puanı |
-| `EVLAND` / `EVPTRNS` | Gerçek buharlaşma/evapotranspirasyon | Ham veri olarak istenir; kuraklık endeksinde **kullanılmaz** |
+| `T2M` | 2 m mean temperature | Seasonal temperature, climate summary |
+| `T2M_MAX` / `T2M_MIN` | Daily max/min temperature | Frost and heat stress |
+| `PRECTOTCORR` | Corrected precipitation | Water balance, drought |
+| `RH2M` | Relative humidity | Informational |
+| `ALLSKY_SFC_SW_DWN` | Solar radiation | Informational |
+| `WS2M` | Wind | Informational |
+| `GWETROOT` / `GWETTOP` | Root zone / surface soil moisture | Soil condition score, drought |
+| `TS` | Soil temperature | Soil condition score |
+| `EVLAND` / `EVPTRNS` | Actual evaporation/evapotranspiration | Requested as raw data; **not used** in the aridity index |
 
-### 3.3. Kuraklık sınıfı ve ET0
+### 3.3. Aridity class and ET0
 
-NASA'nın `EVLAND`/`EVPTRNS` değerleri **gerçek** buharlaşmadır; aridity index için potansiyel/referans ET gerekir. Bu nedenle:
+NASA's `EVLAND`/`EVPTRNS` values are **actual** evaporation; an aridity index requires potential/reference ET. Therefore:
 
-- Aylık `T2M`, `T2M_MAX`, `T2M_MIN` ve enlemden **Hargreaves-Samani ET0** hesaplanır.
-- `aridity_index = yıllık yağış / yıllık ET0`.
-- Sınıflar: `<0.05` hiper-kurak, `<0.20` kurak, `<0.50` yarı kurak, `<0.65` kuru-yarı nemli, `<1.0` nemli, `≥1.0` çok nemli.
+- **Hargreaves-Samani ET0** is computed from monthly `T2M`, `T2M_MAX`, `T2M_MIN`, and latitude.
+- `aridity_index = annual precipitation / annual ET0`.
+- Classes: `<0.05` hyper-arid, `<0.20` arid, `<0.50` semi-arid, `<0.65` dry-subhumid, `<1.0` humid, `≥1.0` very humid.
 
-Ankara örneğinde yıllık ET0 ~1724 mm ve indeks 0.243 → `semi_arid`. Hargreaves, özellikle geniş günlük sıcaklık aralığı olan karasal iklimlerde ET0'ı abartabilir; üretimde yerel FAO-56/istasyon verisiyle kalibre edilmelidir. Bu, raporda bilinçli bir yaklaşım olarak işaretlenmiştir.
+In the Ankara example, annual ET0 is ~1724 mm and the index is 0.243 → `semi_arid`. Hargreaves can overestimate ET0, especially in continental climates with a wide daily temperature range; in production it should be calibrated with local FAO-56/station data. This is flagged in the report as a deliberate approach.
 
-### 3.4. NASA'nın sağlamadıkları
+### 3.4. What NASA does not provide
 
-- Toprak besin elementleri (N-P-K), pH, organik madde, EC.
-- Tarla ölçeğinde veri (grid ~0.5° × 0.625°, orta enlemde ~50 km).
-- Hava **tahmini** (daily endpoint geçmiş/gecikmeli gözlemdir).
-- Gelecek iklim projeksiyonu (CMIP6 senaryoları ayrı veri setidir).
-- Pazar fiyatı, yerel çeşit, hastalık/zararlı baskısı.
+- Soil nutrients (N-P-K), pH, organic matter, EC.
+- Field-scale data (grid ~0.5° × 0.625°, ~50 km at mid-latitudes).
+- Weather **forecast** (the daily endpoint is historical/lagged observation).
+- Future climate projection (CMIP6 scenarios are a separate dataset).
+- Market price, local variety, disease/pest pressure.
 
-Bu eksikler yanıtta `soil.data_gaps` ve `environment.notes` içinde açıkça belirtilir. Bu "şeffaflık" bilinçli bir tasarım kararıdır: çiftçiye eksik veriyle kesinlik numarası vermektense belirsizliği göstermek daha güvenlidir.
+These gaps are explicitly stated in the response under `soil.data_gaps` and `environment.notes`. This "transparency" is a deliberate design decision: showing uncertainty is safer than giving the farmer a precise number based on incomplete data.
 
 ---
 
-## 4. AI sağlayıcıları: karşılaştırma ve değerlendirme
+## 4. AI providers: comparison and evaluation
 
-### 4.1. Kısa karar
+### 4.1. Short decision
 
-| Senaryo | Önerim | Neden |
+| Scenario | My recommendation | Why |
 |---|---|---|
-| MVP / düşük maliyet / ilk sürüm | **Google Gemini 3.5 Flash-Lite** | Ücretsiz katman, düşük fiyat, iyi Türkçe, JSON modu, hızlı |
-| Kalite ve JSON güvenilirliği öncelikli | **OpenAI GPT-4.1-mini** | Tutarlı yapılandırılmış çıktı, olgun ekosistem |
-| Karmaşık agronomik akıl yürütme | **Anthropic Claude Sonnet** | Uzun bağlam, temkinli dil, güçlü akıl yürütme |
-| Çok düşük gecikme | **Groq (Llama 3.3 70B)** | Gerçek zamana yakın yanıt |
-| AB veri ikametgahı | **Mistral** | AB merkezli seçenekler, uygun maliyet |
-| Gizlilik / çevrimdışı | **Ollama + Qwen2.5/Llama 3.3** | Veri dışarı çıkmaz, token ücreti yok |
-| Çoklu model denemesi | **OpenRouter** | Tek anahtar, model karşılaştırma |
-| Maliyet çok kritik, gizlilik esnek | **DeepSeek** | Çok düşük token maliyeti |
+| MVP / low cost / first release | **Google Gemini 3.5 Flash-Lite** | Free tier, low price, good Turkish, JSON mode, fast |
+| Quality and JSON reliability priority | **OpenAI GPT-4.1-mini** | Consistent structured output, mature ecosystem |
+| Complex agronomic reasoning | **Anthropic Claude Sonnet** | Long context, cautious language, strong reasoning |
+| Very low latency | **Groq (Llama 3.3 70B)** | Near real-time response |
+| EU data residency | **Mistral** | EU-based options, reasonable cost |
+| Privacy / offline | **Ollama + Qwen2.5/Llama 3.3** | Data never leaves, no token fees |
+| Multi-model experimentation | **OpenRouter** | One key, model comparison |
+| Cost very critical, privacy flexible | **DeepSeek** | Very low token cost |
 
-**Benim "en iyisi" değerlendirmem:** Bu ürün için en dengeli başlangıç **Gemini 3.5 Flash-Lite + deterministik fallback**'tir. Nedeni: tarımsal danışmanlık yüksek hacimli, çok dilli ve maliyet duyarlı bir iş; Gemini'nin ücretsiz katmanı ve JSON modu MVP'yi hızlı doğrulamaya izin verir. Ürün-pazar uyumu kanıtlandıktan sonra kalite kritik akışlarda GPT-4.1-mini veya Claude'a geçmek, ya da ikisini A/B test etmek mantıklıdır. Gizlilik regülasyonu olan ülkelerde Ollama/Azure OpenAI bölgesel dağıtım öne çıkar.
+**My "best" assessment:** The most balanced starting point for this product is **Gemini 3.5 Flash-Lite + deterministic fallback**. The reason: agricultural advisory is a high-volume, multilingual, cost-sensitive business; Gemini's free tier and JSON mode allow rapid MVP validation. After product-market fit is proven, moving to GPT-4.1-mini or Claude in quality-critical flows, or A/B testing the two, makes sense. In countries with privacy regulation, Ollama/Azure OpenAI regional deployment stands out.
 
-> **AI zorunlu değildir.** `AI_PROVIDER=heuristic` (varsayılan) ile tüm uç noktalar çalışır; açıklamalar deterministik şablonla üretilir. Anahtar eklenirse yalnızca açıklama kalitesi artar, sıralama değişmez.
+> **AI is not mandatory.** With `AI_PROVIDER=heuristic` (default) all endpoints work; explanations are generated with a deterministic template. Adding a key only improves explanation quality, not the ranking.
 
-> **Gemini model notu:** Kasım 2026 itibarıyla `gemini-2.5-flash` 1 Aralık 2026'dan itibaren `gemini-3.5-flash-lite`'a yönlendirilmektedir. Kod varsayılan olarak `gemini-3.5-flash-lite` kullanır, kimlik doğrulamayı `x-goog-api-key` başlığıyla yapar ve Gemini 3.x'te kaldırılan `temperature` parametresini yalnızca `gemini-2*` modellerine gönderir.
+> **Gemini model note:** As of November 2026, `gemini-2.5-flash` is being redirected to `gemini-3.5-flash-lite` from December 1, 2026. The code uses `gemini-3.5-flash-lite` by default, authenticates with the `x-goog-api-key` header, and only sends the `temperature` parameter, removed in Gemini 3.x, to `gemini-2*` models.
 
-> Model adları, fiyatlar ve kotalar hızla değişir. Bu tablo Kasım 2026 itibarıyla niteliksel bir değerlendirmedir; üretim öncesi güncel fiyat/kota/veri politikası kontrol edilmelidir.
+> Model names, prices, and quotas change rapidly. This table is a qualitative assessment as of November 2026; current pricing/quota/data policy should be checked before production.
 
-### 4.2. Ayrıntılı avantaj / dezavantaj tablosu
+### 4.2. Detailed advantage / disadvantage table
 
-| Sağlayıcı / model | Avantajlar | Dezavantajlar | Maliyet | Gecikme | Gizlilik | Türkçe / JSON | En uygun |
+| Provider / model | Advantages | Disadvantages | Cost | Latency | Privacy | Turkish / JSON | Best for |
 |---|---|---|---|---|---|---|---|
-| **Google Gemini 3.5 Flash-Lite** | Ücretsiz katman; çok düşük fiyat; 1M'a yakın bağlam; güçlü çok dillilik; yerleşik JSON modu; hızlı | Ücretsiz katmanda hız/veri kullanım koşulları değişken; bölgesel erişim kısıtları; model sürümleri sık değişir; bazen aşırı özgüvenli | $ (ücretsiz katman) | Düşük-orta | Google politikaları | Çok iyi / çok iyi | MVP, maliyet duyarlı üretim |
-| **OpenAI GPT-4.1-mini / GPT-4.1** | En tutarlı structured output; güçlü araç çağırma; olgun SDK/ekosistem; iyi Türkçe | Ücretsiz katman yok; yüksek hacimde maliyet; veri ikametgahı/onay; kota yönetimi | $$ | Düşük-orta | OpenAI politikaları; kurumsal seçenekler | Çok iyi / çok yüksek | Kalite kritik üretim |
-| **Anthropic Claude Sonnet / Haiku** | Güçlü akıl yürütme; uzun doküman; temkinli, riskten kaçınan dil; yüksek kaliteli Türkçe | Pahalı; ücretsiz katman yok; JSON için şema/tool desteği ek doğrulama ister | $$$ | Orta | Anthropic politikaları | Çok iyi / yüksek | Karmaşık senaryo, danışmanlık |
-| **Groq (Llama 3.3 70B)** | Çok düşük gecikme; uygun fiyat; OpenAI uyumlu | Model çeşidi sınırlı; açık modelde Türkçe nüansı daha zayıf; hız sınırı | $ | Çok düşük | Groq politikaları | İyi / orta-yüksek | Sohbet, hızlı ön değerlendirme |
-| **Mistral Small / Large** | AB veri seçenekleri; uygun fiyat; iyi çok dillilik; hızlı küçük modeller | Ekosistem daha küçük; en zor akıl yürütmede büyük model gerekir | $ | Düşük | AB seçenekleri | İyi / yüksek | AB veri ikametgahı |
-| **DeepSeek V3 / R1** | Çok düşük maliyet; güçlü akıl yürütme; OpenAI uyumlu | Çin merkezli veri işleme; gizlilik/uyum riski; yoğunlukta gecikme; Türkçe tarım terminolojisi doğrulanmalı | $ | Orta | Yurt dışı; kurumsal onay şart | İyi / yüksek | Maliyet kritik, hassas olmayan veri |
-| **xAI Grok** | Hızlı; güncel bilgi; OpenAI uyumlu | Tarıma özel değil; maliyet/kota belirsiz; Türkçe modelden modele değişir | $$ | Düşük | xAI politikaları | İyi / yüksek | İkincil sağlayıcı |
-| **Together AI** | Açık modelleri uygun fiyatla barındırır; model çeşitliliği | Açık modellerde Türkçe değişken; kurumsal olgunluk daha az | $ | Düşük-orta | Sağlayıcı politikaları | Değişken / orta-yüksek | Açık model denemeleri |
-| **OpenRouter** | Tek anahtarla çoklu model; kolay A/B; yedekleme | Aracı ücreti; gizlilik modele göre değişir; tek nokta bağımlılığı | $$ | Değişken | Modele göre | Değişken | Prototip, model karşılaştırma |
-| **Ollama (yerel)** | Tamamen yerel/çevrimdışı; veri dışarı çıkmaz; token ücreti yok | Donanım (RAM/GPU) ve operasyon yükü; küçük modellerde Türkçe/akıl yürütme zayıf; güvenlik sizin sorumluluğunuz | Donanım | Donanıma bağlı | Tamamen yerel | Orta / orta | Gizlilik, saha/offline |
-| **Hugging Face Inference** | Çok geniş model kataloğu; deneme kolaylığı; uygun fiyat | Cold start; kalite değişken; kota; üretim SLA'sı zayıf | $ | Orta-yüksek | Modele göre | Değişken | Deney, özel model |
-| **Azure OpenAI / AWS Bedrock / Vertex** | Kurumsal uyum, bölgesel veri ikametgahı, SLA, özel ağ | Kurulum maliyeti; model seçimi sağlayıcıya bağlı; karmaşıklık | $$-$$$ | Düşük-orta | En güçlü kurumsal seçenekler | Çok iyi | Regüle pazarlar, kurumsal |
+| **Google Gemini 3.5 Flash-Lite** | Free tier; very low price; near 1M context; strong multilingual support; built-in JSON mode; fast | Free-tier speed/data usage terms vary; regional access restrictions; model versions change frequently; sometimes overconfident | $ (free tier) | Low-medium | Google policies | Very good / very good | MVP, cost-sensitive production |
+| **OpenAI GPT-4.1-mini / GPT-4.1** | Most consistent structured output; strong tool calling; mature SDK/ecosystem; good Turkish | No free tier; cost at high volume; data residency/approval; quota management | $$ | Low-medium | OpenAI policies; enterprise options | Very good / very high | Quality-critical production |
+| **Anthropic Claude Sonnet / Haiku** | Strong reasoning; long documents; cautious, risk-averse language; high-quality Turkish | Expensive; no free tier; JSON requires schema/tool support plus extra validation | $$$ | Medium | Anthropic policies | Very good / high | Complex scenarios, advisory |
+| **Groq (Llama 3.3 70B)** | Very low latency; affordable; OpenAI-compatible | Limited model variety; weaker Turkish nuance in open models; rate limits | $ | Very low | Groq policies | Good / medium-high | Chat, quick pre-assessment |
+| **Mistral Small / Large** | EU data options; affordable; good multilingual support; fast small models | Smaller ecosystem; hardest reasoning requires the large model | $ | Low | EU options | Good / high | EU data residency |
+| **DeepSeek V3 / R1** | Very low cost; strong reasoning; OpenAI-compatible | China-based data processing; privacy/compliance risk; latency under load; Turkish agricultural terminology must be verified | $ | Medium | Overseas; enterprise approval required | Good / high | Cost-critical, non-sensitive data |
+| **xAI Grok** | Fast; current information; OpenAI-compatible | Not agriculture-specific; cost/quota unclear; Turkish varies by model | $$ | Low | xAI policies | Good / high | Secondary provider |
+| **Together AI** | Hosts open models affordably; model variety | Turkish varies across open models; less enterprise maturity | $ | Low-medium | Provider policies | Variable / medium-high | Open model experiments |
+| **OpenRouter** | Many models with one key; easy A/B; backup | Middleman fee; privacy varies by model; single point of dependency | $$ | Variable | Depends on model | Variable | Prototyping, model comparison |
+| **Ollama (local)** | Fully local/offline; data never leaves; no token fees | Hardware (RAM/GPU) and operational burden; weak Turkish/reasoning in small models; security is your responsibility | Hardware | Hardware-dependent | Fully local | Medium / medium | Privacy, field/offline |
+| **Hugging Face Inference** | Very broad model catalog; easy experimentation; affordable | Cold start; variable quality; quota; weak production SLA | $ | Medium-high | Depends on model | Variable | Experiments, custom models |
+| **Azure OpenAI / AWS Bedrock / Vertex** | Enterprise compliance, regional data residency, SLA, private network | Setup cost; model choice depends on provider; complexity | $$-$$$ | Low-medium | Strongest enterprise options | Very good | Regulated markets, enterprise |
 
-### 4.3. Neden sağlayıcı soyutlaması?
+### 4.3. Why provider abstraction?
 
-`AIProvider` arayüzü sayesinde aynı ürün kodu:
+Thanks to the `AIProvider` interface, the same product code:
 
-- OpenAI uyumlu herhangi bir servisle (`AI_PROVIDER=openai|groq|mistral|deepseek|xai|together|openrouter|ollama|custom`),
-- Gemini ile (`AI_PROVIDER=gemini`),
-- Claude ile (`AI_PROVIDER=anthropic`),
-- hiçbiri olmadan (`AI_PROVIDER=heuristic`)
+- works with any OpenAI-compatible service (`AI_PROVIDER=openai|groq|mistral|deepseek|xai|together|openrouter|ollama|custom`),
+- with Gemini (`AI_PROVIDER=gemini`),
+- with Claude (`AI_PROVIDER=anthropic`),
+- without any of them (`AI_PROVIDER=heuristic`).
 
-çalışır. Sağlayıcı değiştirmek kod değişikliği gerektirmez; yalnızca `.env` değişir. Bu, fiyat/kota/veri politikası değişimlerine karşı en önemli mimari sigortadır.
+Changing the provider requires no code change; only `.env` changes. This is the most important architectural insurance against price/quota/data policy changes.
 
-### 4.4. AI güvenlik önlemleri (uygulanan)
+### 4.4. AI safeguards (implemented)
 
-1. **Allowlist:** LLM yalnızca aday listesindeki `crop_key`'leri döndürebilir; bilinmeyenler filtrelenir.
-2. **JSON şeması:** Pydantic ile doğrulama; bozuk JSON `AIProviderError`'a dönüşür.
-3. **Deterministik çıpa:** Nihai puanın %65'i kural motorundan gelir.
-4. **Fallback:** LLM hatasında analiz tamamen durmaz; deterministik danışman devreye girer.
-5. **Token sınırı:** LLM'e en fazla 8 aday gönderilir; yanıt 1600 token ile sınırlıdır.
-6. **Prompt sınırları:** Verilmeyen veriyi uydurmama, kesin verim/kâr garantisi vermeme, eksik veriyi belirtme talimatı.
-7. **Şeffaflık:** Yanıtta `ai.provider`, `used`, `fallback_used`, `latency_ms`, `error` alanları döner.
-8. **Disclaimer:** Her yanıtta yasal/sorumluluk reddi metni bulunur.
+1. **Allowlist:** The LLM may only return `crop_key`s from the candidate list; unknown ones are filtered.
+2. **JSON schema:** Validation with Pydantic; malformed JSON becomes `AIProviderError`.
+3. **Deterministic anchor:** 65% of the final score comes from the rule engine.
+4. **Fallback:** On LLM error the analysis does not stop entirely; the deterministic advisor takes over.
+5. **Token limit:** At most 8 candidates are sent to the LLM; the response is limited to 1600 tokens.
+6. **Prompt constraints:** Instructions not to fabricate data that was not provided, not to guarantee exact yield/profit, and to state missing data.
+7. **Transparency:** The response returns `ai.provider`, `used`, `fallback_used`, `latency_ms`, `error` fields.
+8. **Disclaimer:** Every response includes legal/liability disclaimer text.
 
-Bunlar hallucination'ı **azaltır, sıfırlamaz**. Üretimde ayrıca agronomist incelemesi ve değerlendirme seti gerekir.
+These **reduce but do not eliminate** hallucination. Production also requires agronomist review and an evaluation set.
 
 ---
 
-## 5. Puanlama ve karar mantığı
+## 5. Scoring and decision logic
 
-### 5.1. Bileşenler
+### 5.1. Components
 
-| Bileşen | Ağırlık | Hesap |
+| Component | Weight | Calculation |
 |---|---:|---|
-| Sıcaklık | %20 | Ekinin sezonluk ortalama sıcaklık optimum/absolut aralığına lineer uyum |
-| Su dengesi | %24 | `(sezon yağışı + sulama arzı) / sezonluk su ihtiyacı`; kuraklık toleransı açığı yumuşatır |
-| pH | %10 | pH optimum ve tolerans aralığı |
-| Doku | %10 | Doku grubu (hafif/orta/ağır) mesafesi |
-| Tuzluluk | %4 | EC eşiği; ekin toleransına göre |
-| İklim riski | %10 | Donlu ay sayısı, sıcak stresi ay sayısı, kuraklık sınıfı |
-| Hedefe uygunluk | %14 | Verim/kâr/az su/az girdi/organik/toprak sağlığı/riskten kaçınma |
-| Pazar | %5 | Talep endeksi; pazar erişimi düşükse tavan |
-| Ekim takvimi | %3 | Çiftçinin ayı ile ekinin ekim penceresi mesafesi |
+| Temperature | 20% | Linear fit of the crop's seasonal mean temperature to its optimum/absolute range |
+| Water balance | 24% | `(seasonal precipitation + irrigation supply) / seasonal water requirement`; drought tolerance softens the deficit |
+| pH | 10% | pH optimum and tolerance range |
+| Texture | 10% | Texture group (light/medium/heavy) distance |
+| Salinity | 4% | EC threshold; according to crop tolerance |
+| Climate risk | 10% | Number of frost months, number of heat-stress months, aridity class |
+| Goal fit | 14% | Yield/profit/low water/low input/organic/soil health/risk avoidance |
+| Market | 5% | Demand index; cap if market access is low |
+| Planting calendar | 3% | Distance between the farmer's month and the crop's planting window |
 
-Eksik veri varsa ilgili bileşen paydadan çıkarılır (yeniden ağırlıklandırma). Örneğin pH girilmediyse pH puanı "70 varsayılanı" ile skoru kirletmez; sadece hesaplama dışı kalır. Bu, veri eksikliğinde yanlış kesinlik üretmemek için önemlidir.
+If data is missing, the relevant component is removed from the denominator (re-weighting). For example, if pH is not entered, the pH score does not contaminate the score with a "default of 70"; it is simply excluded from the calculation. This matters to avoid false precision when data is missing.
 
-### 5.2. Sert limitler
+### 5.2. Hard limits
 
-Aşağıdaki durumlarda puan çarpanla düşürülür:
+In the following cases the score is reduced by a multiplier:
 
-- Sezon sıcaklığı ekinin absolut sınırının dışında → `×0.35`
-- Su dengesi sıfır ve sulama yok → `×0.50`
-- pH absolut sınır dışında → `×0.65`
-- 3+ donlu ay ve dona çok hassas çok yıllık → `×0.55`
-- 3+ sıcak stresi ayı ve sıcağa çok hassas → `×0.75`
+- Seasonal temperature outside the crop's absolute limit → `×0.35`
+- Water balance zero and no irrigation → `×0.50`
+- pH outside the absolute limit → `×0.65`
+- 3+ frost months and a very frost-sensitive perennial → `×0.55`
+- 3+ heat-stress months and very heat-sensitive → `×0.75`
 
-### 5.3. AI birleştirme
+### 5.3. AI merge
 
 ```text
 final_score = 0.65 × rule_score + 0.35 × ai_score
 ```
 
-`AI_WEIGHT` ortam değişkeniyle 0-1 arasında ayarlanabilir. `AI_WEIGHT=0` tamamen deterministik, `1` tamamen AI demektir. Varsayılan 0.35, AI'ın sıralamayı tamamen ele geçirmesini engellerken yorum katmasına izin verir.
+`AI_WEIGHT` can be adjusted between 0 and 1 via an environment variable. `AI_WEIGHT=0` means fully deterministic, `1` means fully AI. The default of 0.35 prevents AI from completely taking over the ranking while allowing it to add interpretation.
 
-### 5.4. Neden bu yaklaşım?
+### 5.4. Why this approach?
 
-- **Açıklanabilirlik:** Her önerinin bileşen kırılımı var; çiftçi "neden bu ekin?" sorusunun cevabını görebilir.
-- **Tutarlılık:** Aynı girdi aynı kural puanını verir; LLM sürüm değişse bile çıpa sabit kalır.
-- **Maliyet:** LLM yalnızca 8 aday ve kısa bağlamla çağrılır.
-- **Güvenlik:** LLM'in olmayan toprak verisini uydurması skoru tek başına belirleyemez.
+- **Explainability:** Every recommendation has a component breakdown; the farmer can see the answer to "why this crop?"
+- **Consistency:** The same input gives the same rule score; even if the LLM version changes, the anchor stays fixed.
+- **Cost:** The LLM is called with only 8 candidates and a short context.
+- **Safety:** The LLM fabricating soil data that does not exist cannot determine the score on its own.
 
-### 5.5. Serbest metinli akışta AI neden sıralamaya karışmıyor?
+### 5.5. Why doesn't AI affect the ranking in the free-text flow?
 
-`/api/v1/advice` akışında `final_score = rule_score` olarak sabitlenir ve `ai_score = null` döner. Nedeni:
+In the `/api/v1/advice` flow, `final_score = rule_score` is fixed and `ai_score = null` is returned. The reason:
 
-- Çiftçinin yazdığı metin **yapılandırılmamıştır**; "sulama yok" gibi bir cümle ile formdaki "tam sulama" seçimi çelişebilir.
-- Aynı cümlenin farklı modellerde farklı yorumlanması, aynı tarla için farklı sıralama üretir. Bu, tarımsal karar için kabul edilemez bir oynaklıktır.
-- Bu yüzden metin yalnızca **açıklama** katmanına ve "eksik bilgi" sorularına girer. Sıralamayı belirleyen tek şey yapılandırılmış alanlar + NASA verisidir.
-- AI'ın uydurma ekin adı önermesi `parse_advice` + aday allowlist ile engellenir; bilinmeyen isim `risks` alanına "doğrulanamayan bitki adı ayıklandı" notuyla düşer.
+- The text the farmer writes is **unstructured**; a sentence like "no irrigation" can contradict the "full irrigation" selection in the form.
+- The same sentence being interpreted differently by different models produces different rankings for the same field. This is an unacceptable volatility for an agricultural decision.
+- Therefore the text only enters the **explanation** layer and the "missing information" questions. The only thing that determines the ranking is structured fields + NASA data.
+- AI's suggestion of a fabricated crop name is blocked by `parse_advice` + the candidate allowlist; an unknown name falls into the `risks` field with a note that "unverifiable plant name was filtered out."
 
-### 5.6. Kural motoru veri doğruluğunu doğrular mı?
+### 5.6. Does the rule engine validate data accuracy?
 
-**Hayır.** Kural motoru bir *tutarlılık ve makullük* denetimidir, bir *veri doğrulama* aracı değildir. Ayırt edilmesi gereken üç katman:
+**No.** The rule engine is a *consistency and plausibility* check, not a *data validation* tool. Three layers must be distinguished:
 
-| Katman | Kural motoru ne yapar? | Ne yapamaz? |
+| Layer | What does the rule engine do? | What can't it do? |
 |---|---|---|
-| NASA POWER verisi | Değerleri agronomik aralıklara göre yorumlar (ör. 613 mm yağış → yarı kurak) | Sensör/uydu hatasını, grid ortalamasının tarla gerçeğinden sapmasını tespit edemez |
-| Çiftçi girdisi (pH, organik madde, doku) | Aralık ve tutarlılık kontrolü (pH 3.5-10, tuzluluk eşikleri) | Çiftçinin yanlış beyanını yakalayamaz; ölçümün doğruluğunu bilemez |
-| Öneri sonucu | Sert agronomik limitlerle bariz hataları engeller (dona hassas bitkiyi 3 donlu aya koymaz) | Verim, fiyat veya kâr garantisi veremez; yerel çeşit/hastalık bilgisini bilemez |
+| NASA POWER data | Interprets values against agronomic ranges (e.g., 613 mm precipitation → semi-arid) | Cannot detect sensor/satellite error or the deviation of the grid average from field reality |
+| Farmer input (pH, organic matter, texture) | Range and consistency checks (pH 3.5-10, salinity thresholds) | Cannot catch a farmer's misstatement; does not know the measurement's accuracy |
+| Recommendation result | Prevents obvious errors with hard agronomic limits (does not put a frost-sensitive plant in a 3-frost-month month) | Cannot guarantee yield, price, or profit; cannot know local variety/disease information |
 
-Yani kural motoru **"bu öneri saçma mı?"** sorusunu yanıtlar, **"bu veri doğru mu?"** sorusunu değil. Veri doğruluğu için gerekenler: toprak analizi (pH/OM/N-P-K), yerel meteoroloji istasyonu veya daha yüksek çözünürlüklü uydu verisi, çiftçi beyanının uzman tarafından doğrulanması ve sezon sonunda verim geri bildirimi.
+So the rule engine answers **"Is this recommendation absurd?"**, not **"Is this data correct?"**. What is needed for data accuracy: soil analysis (pH/OM/N-P-K), a local weather station or higher-resolution satellite data, expert verification of farmer declarations, and end-of-season yield feedback.
 
 ---
 
-## 6. Testler ve doğrulama
+## 6. Tests and validation
 
-### 6.1. Otomatik testler
+### 6.1. Automated tests
 
 ```text
 64 passed
 ```
 
-| Test dosyası | Kapsam | Adet |
+| Test file | Coverage | Count |
 |---|---|---:|
-| `test_nasa_power.py` | JSON ayrıştırma, `-999` temizliği, cache, retry, HTTP/ağ/hata | 7 |
-| `test_agronomy.py` | İklim özeti, ET0, toprak, son 30 gün, sezon penceresi | 5 |
-| `test_scoring.py` | Katalog, sıralama, sulama, hariç/ilgi, pH, doku, takvim, süre | 10 |
-| `test_ai.py` | Heuristic, JSON temizleme, allowlist, OpenAI/Gemini/Claude, 400 fallback, Gemini 3.x istek şekli | 12 |
-| `test_api.py` | Health, `/geo`, root, katalog, analiz, validasyon, 502/422/503, AI fallback, ağırlık | 14 |
-| `test_advice.py` | `/advice` akışı, serbest metin aktarımı, AI hatasında fallback, `/reverse-geocode`, Nominatim cache/hata | 8 |
-| `test_ui_smoke.py` | Arayüz dosyaları, backend kapalıyken render, çiftçi akışı, detay kutusu, düğme regresyonları, payload sözleşmesi | 8 |
+| `test_nasa_power.py` | JSON parsing, `-999` cleanup, cache, retry, HTTP/network/error | 7 |
+| `test_agronomy.py` | Climate summary, ET0, soil, last 30 days, season window | 5 |
+| `test_scoring.py` | Catalog, ranking, irrigation, exclude/interest, pH, texture, calendar, duration | 10 |
+| `test_ai.py` | Heuristic, JSON cleanup, allowlist, OpenAI/Gemini/Claude, 400 fallback, Gemini 3.x request shape | 12 |
+| `test_api.py` | Health, `/geo`, root, catalog, analysis, validation, 502/422/503, AI fallback, weight | 14 |
+| `test_advice.py` | `/advice` flow, free-text passthrough, fallback on AI error, `/reverse-geocode`, Nominatim cache/error | 8 |
+| `test_ui_smoke.py` | UI files, rendering with backend off, farmer flow, detail box, button regressions, payload contract | 8 |
 
-Testler **gerçek NASA veya LLM çağrısı yapmaz**; `httpx.MockTransport` ve fake istemciler kullanır. Bu sayede CI'da anahtarsız ve ücretsiz çalışır.
+Tests **do not make real NASA or LLM calls**; they use `httpx.MockTransport` and fake clients. This lets them run in CI without keys and free of charge.
 
-### 6.2. Canlı doğrulama
+### 6.2. Live validation
 
-- Gerçek NASA POWER çağrısı: Ankara, 39.93/32.85.
-- Sonuç: 418.2 mm yıllık yağış, 10.31 °C ortalama, ET0 ~1723.7 mm, aridity 0.243, `semi_arid`.
-- İlk analiz ~2.4 s (NASA ağı); cache'li analiz ~2 ms.
-- Heuristic modda öneri: Kışlık Buğday 93.7, Arpa 88.6, Üzüm 84.5.
-- `GET /docs` ve `POST /api/v1/analyze` uçtan uca çalıştı.
-- `POST /api/v1/advice` (Edirne 41.6771/26.5557, serbest metinle): 2.7 s, 613 mm / 13.65 °C,
-  "Bu tarlada Kışlık Buğday ekmen en doğrusu. Alternatif: Arpa." — 5 adım, 4 büyütme, 4 besleme, 4 bakım maddesi.
-- `GET /api/v1/reverse-geocode` gerçek Nominatim çağrısı: "Sabuni Mahallesi, Edirne Merkez, Edirne" (~400 ms, sonrası cache).
-- Streamlit arayüzü canlı backend'e bağlanıp test edildi: öneri düğmesi → sonuç ekranı, detay kutusu → iklim/toprak/puan tablosu; istisna yok.
+- Real NASA POWER call: Ankara, 39.93/32.85.
+- Result: 418.2 mm annual precipitation, 10.31 °C mean, ET0 ~1723.7 mm, aridity 0.243, `semi_arid`.
+- First analysis ~2.4 s (NASA network); cached analysis ~2 ms.
+- Recommendation in heuristic mode: Winter Wheat 93.7, Barley 88.6, Grape 84.5.
+- `GET /docs` and `POST /api/v1/analyze` worked end to end.
+- `POST /api/v1/advice` (Edirne 41.6771/26.5557, free text): 2.7 s, 613 mm / 13.65 °C,
+  "Winter Wheat is the best choice for this field. Alternative: Barley." — 5 steps, 4 growth, 4 feeding, 4 care items.
+- `GET /api/v1/reverse-geocode` real Nominatim call: "Sabuni Mahallesi, Edirne Merkez, Edirne" (~400 ms, cached afterwards).
+- The Streamlit interface was connected to the live backend and tested: recommendation button → result screen, detail box → climate/soil/score table; no exceptions.
 
-### 6.3. Test edilmeyenler
+### 6.3. Untested
 
-- Gerçek LLM anahtarlarıyla canlı kalite testi (anahtar yok).
-- Farklı ülkelerdeki yerel ekin çeşitleri ve agronomik doğruluk.
-- Yük/performans testi (locust/k6).
-- Güvenlik sızma testi.
-- Uzun süreli NASA kota davranışı.
+- Live quality testing with real LLM keys (no key).
+- Local crop varieties and agronomic accuracy in different countries.
+- Load/performance testing (locust/k6).
+- Security penetration testing.
+- Long-term NASA quota behavior.
 
-Bunlar üretim öncesi yapılmalıdır.
-
----
-
-## 7. Nereler daha iyi hale getirilebilir? (öncelikli)
-
-### P0 — Üretimden önce şart
-
-1. **Toprak verisi:** SoilGrids / OpenLandMap entegrasyonu + zorunlu/teşvikli toprak analizi. NASA tek başına yeterli değil.
-2. **Hava tahmini:** NASA daily geçmiş veridir; Open-Meteo/NOAA GFS/ECMWF ile 7-14 günlük tahmin ve sulama uyarısı.
-3. **Geocoding:** Adres/il/ilçe araması (Nominatim, Google Geocoding); şu an lat/lon manuel.
-4. **Kimlik doğrulama + rate limit:** API anahtarı/JWT, kullanıcı başına kota, kötüye kullanım koruması.
-5. **Kalıcılık:** PostgreSQL + PostGIS; analiz geçmişi, çiftlik/tarla kaydı, geri bildirim.
-6. **Gözlemlenebilirlik:** Structured logging, Prometheus/OpenTelemetry, hata izleme, maliyet/gecikme panosu.
-7. **Dağıtım:** Docker, CI (lint + test), staging/prod, HTTPS, secret manager.
-8. **Veri doğrulama:** Agronomist etiketli değerlendirme seti; önerilerin isabet oranı; farklı bölgelerde backtest.
-
-### P1 — Ürünü güçlendirir
-
-9. **Ekin simülasyonu:** DSSAT/APSIM/CROPWAT ile verim ve sulama simülasyonu; kural motoru yerine/yanına.
-10. **İklim projeksiyonu:** NASA NEX-GDDP-CMIP6 ile SSP2-4.5/SSP5-8.5 senaryoları; "2030-2050'de bu ekin hâlâ uygun mu?" sorusu.
-11. **Uydu verisi:** Sentinel-2 NDVI, SMAP toprak nemi, Landsat ile tarla düzeyi doğrulama.
-12. **Pazar fiyatları:** Yerel borsa/kooperatif fiyatları, girdi maliyetleri, brüt marj hesabı.
-13. **Çeşit veritabanı:** Bölgeye özel sertifikalı çeşitler, dayanıklılık, verim potansiyeli.
-14. **Zararlı/hastalık modelleri:** GDD tabanlı risk uyarıları, erken uyarı.
-15. **Sulama programı:** FAO-56 ETc, toprak su tutma kapasitesi, sulama verimliliği.
-16. **i18n:** Tüm metinlerin çevrilebilir olması; şu an heuristic Türkçe/İngilizce, ekin notları ağırlıklı Türkçe.
-17. **Offline/mobil:** Ollama yerel sunucu veya cihaz üstü küçük model; düşük bağlantılı sahalar.
-
-### P2 — Uzun vadeli fark yaratır
-
-18. **Geri bildirim döngüsü:** Çiftçinin "ekdim/ekmedim, sonuç ne oldu?" verisiyle model kalibrasyonu.
-19. **A/B testi:** Gemini vs GPT vs Claude; maliyet/kalite/gecikme ölçümü.
-20. **Verim tahmini:** Uydu + hava + toprak + çiftçi kaydı ile ML modeli; kural motorunun yerini almaz, destekler.
-21. **Karbon/rejeneratif tarım:** Organik madde, karbon kredisi, su ayak izi modülleri.
-22. **Sigorta/finans:** Risk skoruna bağlı sigorta primi veya kredi profilı (regülasyon dikkatli).
+These should be done before production.
 
 ---
 
-## 8. Planındaki eksik veya yanlış noktalar (açık rapor)
+## 7. Where can it be improved? (prioritized)
 
-Aşağıdakiler eleştirel ama yapıcıdır; çoğu bu projede kısmen hafifletildi, ancak ürünleşme için hâlâ açıktır.
+### P0 — Required before production
 
-### 8.1. "NASA API'leriyle toprak verimliliği" — teknik olarak yanlış
+1. **Soil data:** SoilGrids / OpenLandMap integration + mandatory/incentivized soil analysis. NASA alone is not enough.
+2. **Weather forecast:** NASA daily is historical data; a 7-14 day forecast and irrigation warning with Open-Meteo/NOAA GFS/ECMWF.
+3. **Geocoding:** Address/city/district search (Nominatim, Google Geocoding); currently lat/lon is manual.
+4. **Authentication + rate limit:** API key/JWT, per-user quota, abuse protection.
+5. **Persistence:** PostgreSQL + PostGIS; analysis history, farm/field records, feedback.
+6. **Observability:** Structured logging, Prometheus/OpenTelemetry, error tracking, cost/latency dashboard.
+7. **Deployment:** Docker, CI (lint + test), staging/prod, HTTPS, secret manager.
+8. **Data validation:** Agronomist-labeled evaluation set; hit rate of recommendations; backtesting in different regions.
 
-NASA POWER toprak **nemini** ve **sıcaklığını** verir; verimlilik için gerekli N-P-K, pH, organik madde, katyon değişim kapasitesi ve tuzluluğu **vermez**. Bu projede pH/OM/EC çiftçi girdisi; eksikse `data_gaps` uyarısı var. Gerçek çözüm: SoilGrids/OpenLandMap + laboratuvar analizi + yerel toprak haritaları.
+### P1 — Strengthens the product
 
-### 8.2. "AI en iyi ekin türünü seçsin" — LLM'e fazla güvenmek
+9. **Crop simulation:** Yield and irrigation simulation with DSSAT/APSIM/CROPWAT; instead of/alongside the rule engine.
+10. **Climate projection:** SSP2-4.5/SSP5-8.5 scenarios with NASA NEX-GDDP-CMIP6; the question "will this crop still be suitable in 2030-2050?"
+11. **Satellite data:** Sentinel-2 NDVI, SMAP soil moisture, Landsat for field-level validation.
+12. **Market prices:** Local exchange/cooperative prices, input costs, gross margin calculation.
+13. **Variety database:** Region-specific certified varieties, hardiness, yield potential.
+14. **Pest/disease models:** GDD-based risk alerts, early warning.
+15. **Irrigation scheduling:** FAO-56 ETc, soil water holding capacity, irrigation efficiency.
+16. **i18n:** All texts translatable; currently the heuristic is Turkish/English, crop notes mostly Turkish.
+17. **Offline/mobile:** Ollama local server or an on-device small model; low-connectivity fields.
 
-LLM'ler tarımsal bir hesap motoru değildir; aynı girdiye farklı cevap verebilir, olmayan veriyi uydurabilir, yerel çeşit/pazar bilgisini bilemez. Bu projede AI'ı **%35 ağırlıkla** ve **allowlist + JSON şeması + deterministik fallback** ile sınırladım. Yine de tek başına yeterli değil: DSSAT/APSIM gibi süreç tabanlı modeller ve agronomist doğrulaması gerekir.
+### P2 — Creates long-term differentiation
 
-### 8.3. "NASA iklim değişikliği verisi" — tarihsel baseline ile gelecek projeksiyonu karıştırmak
-
-Kullandığımız klimatoloji 2001-2025 ortalamasıdır; "iklim değişikliği senaryosu" değildir. Gelecek için NASA NEX-GDDP-CMIP6, SSP senaryoları ve downscaling gerekir. Bugünkü çıktı "mevcut/geçmiş iklimde bu ekin uygun mu?" sorusuna cevap verir; "2050'de uygun mu?" sorusuna değil.
-
-### 8.4. "Hava durumu" — tahmin ile gözlemi karıştırmak
-
-POWER daily endpoint'i geçmişe dönük/gecikmeli veridir; 7 günlük tahmin değildir. Sulama ve don uyarısı için ayrı bir forecast sağlayıcısı (Open-Meteo, NOAA GFS, ECMWF) gerekir.
-
-### 8.5. "Dünyadaki tüm çiftçiler" — tek global model gerçekçi değil
-
-21 ekin ve tek ağırlık seti dünya çapında yeterli değil. Ülke/bölge bazında:
-
-- yerel ekinler ve çeşitler,
-- toprak tipleri ve analiz yöntemleri,
-- pazar fiyatları ve lojistik,
-- iklim kuşakları,
-- dil, birim, regülasyon
-
-farklıdır. Ürün stratejisi "global motor + bölgesel veri paketleri" olmalı; her ülkeye aynı katsayılarla girmek yanıltıcı olur.
-
-### 8.6. Grid çözünürlüğü — tarla ölçeği yanılsaması
-
-POWER ~50 km grid kullanır. Aynı hücredeki iki tarlanın toprağı, eğimi ve suyu farklı olabilir. "Seçilen bölge" ifadesi pazarlama için uygun, agronomik kesinlik için değil. Tarla sınırı (polygon), toprak örneklemesi ve uydu verisi ile desteklenmeli.
-
-### 8.7. Toprak analizi olmadan kesin öneri vermek
-
-pH/OM/EC girilmezse model varsayılanlarla çalışır ve yanıt bunu söyler. Ancak UI bu eksikleri **zorunlu/teşvikli** hale getirmezse çiftçi yanlış kesinlik algılayabilir. UI'da "toprak analizi yok" rozeti ve güven düşürme mekanizması olmalı.
-
-### 8.8. Yasal sorumluluk ve "verim garantisi" riski
-
-Tarımsal öneri, yanlış uygulanırsa ciddi ekonomik zarar doğurabilir. "Şu ekin en kârlı" demek yerine olasılık/risk dili kullanılmalı; disclaimer, kullanım koşulları, sigorta ve insan onayı olmalı. Bu projede disclaimer var ama hukuki metin ve sorumluluk sigortası yok.
-
-### 8.9. Gizlilik ve KVKK/GDPR
-
-Konum, tarla büyüklüğü ve üretim bilgisi kişisel/ticari veridir. Şu an:
-
-- kimlik doğrulama yok,
-- rate limit yok,
-- veri saklama politikası yok,
-- loglarda PII maskesi yok,
-- AI sağlayıcısına veri gönderimi için açık rıza akışı yok.
-
-Üretimde KVKK/GDPR aydınlatma, saklama süresi, silme hakkı, yurt dışı aktarım ve sağlayıcı veri politikaları netleştirilmelidir.
-
-### 8.10. Maliyet ve gecikme kontrolü
-
-Her istekte LLM çağrısı pahalı olabilir. Bu projede 8 aday/1600 token sınırı ve cache var; ancak:
-
-- kullanıcı başına günlük kota,
-- yanıt cache'i (aynı grid + aynı profil),
-- küçük model yönlendirmesi,
-- maliyet alarmı
-
-yok. Özellikle ücretsiz katmanda toplu kullanım kotayı tüketebilir.
-
-### 8.11. Değerlendirme (evaluation) eksikliği
-
-"AI iyi mi?" sorusunun cevabı anekdotla verilemez. Agronomistlerin etiketlediği bir test seti, bölge bazlı backtest, öneri isabet oranı, kullanıcı memnuniyeti ve gerçek hasat verisi gerekir. Bu olmadan %35 AI ağırlığı bile keyfi kalır.
-
-### 8.12. Hastalık/zararlı, sulama ve hasat sonrası süreçler yok
-
-Ekin seçimi tek karar değil; ekim zamanı, gübreleme, sulama, hastalık, hasat, depolama ve satış gerekir. Ürün yol haritası bu zinciri kapsamalı; yoksa çiftçi "ne ekelim?" sorusunun cevabını alır ama sezon boyunca yalnız kalır.
-
-### 8.13. Yerelleştirme ve okuryazarlık
-
-Türkçe/İngilizce destek var; ancak:
-
-- ekin notları ağırlıklı Türkçe,
-- birimler metrik,
-- okuma yazma düzeyi yüksek varsayımı,
-- görsel/işitsel destek yok.
-
-Gerçek kapsama için çok dilli, basit dil, sesli anlatım ve mobil-öncelikli tasarım gerekir.
-
-### 8.14. Veri lisansı ve atıf
-
-NASA verisi açık olsa da atıf/koşullar kontrol edilmeli. Ekin parametreleri ve puan ağırlıkları bu projede derlenmiş yaklaşık değerlerdir; ticari kullanımda yerel kaynak ve uzman kalibrasyonu şarttır.
-
-### 8.15. Altyapı ve dayanıklılık
-
-Tek süreç, in-memory cache, veritabanı yok. Çok örnekli (multi-instance) dağıtımda cache tutarsızlığı, yeniden başlatmada veri kaybı ve yatay ölçekleme sorunları olur. Redis, PostgreSQL ve job queue ile olgunlaştırılmalı.
+18. **Feedback loop:** Model calibration with the farmer's "did I plant/did I not, what was the result?" data.
+19. **A/B testing:** Gemini vs GPT vs Claude; cost/quality/latency measurement.
+20. **Yield prediction:** ML model with satellite + weather + soil + farmer record; does not replace the rule engine, supports it.
+21. **Carbon/regenerative agriculture:** Organic matter, carbon credit, water footprint modules.
+22. **Insurance/finance:** Insurance premium or credit profile tied to the risk score (careful with regulation).
 
 ---
 
-## 9. Yol haritası
+## 8. Missing or wrong points in the plan (open report)
 
-### 0-1 ay (MVP sertleştirme)
+The following is critical but constructive; most were partially mitigated in this project, but they remain open for productization.
 
-- Docker + CI, ortam ayrımı, secret manager
-- Auth/rate limit, PII maskeleme, KVKK/GDPR metinleri
-- SoilGrids + toprak analizi alanları, geocoding
-- Forecast API (Open-Meteo) ve don/sıcak uyarısı
-- Agronomist review ekranı (öneri onayı/reddi)
-- Gerçek LLM anahtarıyla kalite testi ve maliyet ölçümü
+### 8.1. "Soil fertility with NASA APIs" — technically wrong
 
-### 1-3 ay (agronomik derinlik)
+NASA POWER provides soil **moisture** and **temperature**; it **does not provide** the N-P-K, pH, organic matter, cation exchange capacity, and salinity needed for fertility. In this project pH/OM/EC are farmer input; if missing, there is a `data_gaps` warning. The real solution: SoilGrids/OpenLandMap + laboratory analysis + local soil maps.
 
-- DSSAT/APSIM/CROPWAT entegrasyonu (en az pilot bölge)
-- NEX-GDDP-CMIP6 senaryoları
-- Yerel çeşit ve pazar fiyatı veritabanı
-- Sulama programı (FAO-56 ETc)
-- Zararlı/hastalık GDD uyarıları
-- PostgreSQL + PostGIS, analiz geçmişi, çiftlik kaydı
+### 8.2. "Let AI pick the best crop type" — over-trusting the LLM
 
-### 3-6 ay (ölçek ve kanıt)
+LLMs are not an agricultural calculation engine; they can give different answers to the same input, fabricate data that does not exist, and cannot know local variety/market information. In this project I constrained AI to **35% weight** and **allowlist + JSON schema + deterministic fallback**. Even so, it is not enough on its own: process-based models such as DSSAT/APSIM and agronomist validation are required.
 
-- Çok bölgeli saha pilotu, agronomist etiketli değerlendirme seti
-- Uydu (Sentinel-2/SMAP) doğrulama
-- A/B testi: Gemini vs GPT vs Claude; maliyet/kalite
-- Geri bildirim döngüsü ve model kalibrasyonu
-- Mobil/offline senaryo, i18n
-- Sigorta/finans ortaklıkları için risk skoru API'si
+### 8.3. "NASA climate change data" — confusing historical baseline with future projection
+
+The climatology we use is the 2001-2025 average; it is not a "climate change scenario." The future requires NASA NEX-GDDP-CMIP6, SSP scenarios, and downscaling. Today's output answers "is this crop suitable in the current/past climate?", not "will it be suitable in 2050?"
+
+### 8.4. "Weather" — confusing forecast with observation
+
+The POWER daily endpoint is retrospective/lagged data; it is not a 7-day forecast. A separate forecast provider (Open-Meteo, NOAA GFS, ECMWF) is required for irrigation and frost alerts.
+
+### 8.5. "All farmers in the world" — a single global model is not realistic
+
+21 crops and a single weight set are not enough worldwide. At the country/region level:
+
+- local crops and varieties,
+- soil types and analysis methods,
+- market prices and logistics,
+- climate zones,
+- language, units, regulation
+
+differ. The product strategy should be "global engine + regional data packs"; entering every country with the same coefficients would be misleading.
+
+### 8.6. Grid resolution — the field-scale illusion
+
+POWER uses a ~50 km grid. Two fields in the same cell can have different soil, slope, and water. The phrase "selected region" is suitable for marketing, not for agronomic precision. It should be supported by field boundaries (polygon), soil sampling, and satellite data.
+
+### 8.7. Giving precise recommendations without soil analysis
+
+If pH/OM/EC are not entered, the model runs with defaults and the response says so. However, unless the UI makes these gaps **mandatory/incentivized**, the farmer may perceive false precision. The UI should have a "no soil analysis" badge and a confidence-reduction mechanism.
+
+### 8.8. Legal liability and the "yield guarantee" risk
+
+Agricultural advice can cause serious economic damage if applied incorrectly. Instead of saying "this crop is the most profitable," probability/risk language should be used; there should be a disclaimer, terms of use, insurance, and human approval. This project has a disclaimer but no legal text or liability insurance.
+
+### 8.9. Privacy and KVKK/GDPR
+
+Location, field size, and production information are personal/commercial data. Currently:
+
+- no authentication,
+- no rate limit,
+- no data retention policy,
+- no PII masking in logs,
+- no explicit consent flow for sending data to the AI provider.
+
+In production, KVKK/GDPR notices, retention periods, the right to erasure, cross-border transfer, and provider data policies must be clarified.
+
+### 8.10. Cost and latency control
+
+Calling an LLM on every request can be expensive. This project has an 8-candidate/1600-token limit and a cache; however:
+
+- a daily quota per user,
+- response caching (same grid + same profile),
+- small-model routing,
+- a cost alarm
+
+are missing. Especially on the free tier, bulk usage can exhaust the quota.
+
+### 8.11. Lack of evaluation
+
+The answer to "is the AI good?" cannot be given with anecdotes. A test set labeled by agronomists, region-based backtesting, recommendation hit rate, user satisfaction, and real harvest data are required. Without this, even the 35% AI weight remains arbitrary.
+
+### 8.12. No disease/pest, irrigation, or post-harvest processes
+
+Crop selection is not the only decision; planting time, fertilization, irrigation, disease, harvest, storage, and sales are also required. The product roadmap should cover this chain; otherwise the farmer gets an answer to "what should we plant?" but is left alone for the rest of the season.
+
+### 8.13. Localization and literacy
+
+Turkish/English support exists; however:
+
+- crop notes are mostly Turkish,
+- units are metric,
+- a high literacy level is assumed,
+- there is no visual/audio support.
+
+Real coverage requires multilingual support, plain language, voice narration, and mobile-first design.
+
+### 8.14. Data license and attribution
+
+Although NASA data is open, attribution/terms should be checked. Crop parameters and score weights are approximate values compiled for this project; local sources and expert calibration are essential for commercial use.
+
+### 8.15. Infrastructure and resilience
+
+Single process, in-memory cache, no database. Multi-instance deployment would cause cache inconsistency, data loss on restart, and horizontal scaling problems. It should be matured with Redis, PostgreSQL, and a job queue.
 
 ---
 
-## 10. Üretim kontrol listesi
+## 9. Roadmap
 
-- [ ] Gerçek toprak analizi ve yerel uzman doğrulaması
-- [ ] Forecast sağlayıcısı ve don uyarısı
-- [ ] Kimlik doğrulama, rate limit, kota
-- [ ] KVKK/GDPR aydınlatma ve veri saklama politikası
-- [ ] AI sağlayıcı sözleşmesi/veri işleme ekleri
-- [ ] Maliyet alarmı ve token bütçesi
-- [ ] Agronomist onay akışı
-- [ ] Değerlendirme seti ve doğruluk metrikleri
+### 0-1 month (MVP hardening)
+
+- Docker + CI, environment separation, secret manager
+- Auth/rate limit, PII masking, KVKK/GDPR texts
+- SoilGrids + soil analysis fields, geocoding
+- Forecast API (Open-Meteo) and frost/heat alerts
+- Agronomist review screen (recommendation approval/rejection)
+- Quality testing with a real LLM key and cost measurement
+
+### 1-3 months (agronomic depth)
+
+- DSSAT/APSIM/CROPWAT integration (at least a pilot region)
+- NEX-GDDP-CMIP6 scenarios
+- Local variety and market price database
+- Irrigation scheduling (FAO-56 ETc)
+- Pest/disease GDD alerts
+- PostgreSQL + PostGIS, analysis history, farm records
+
+### 3-6 months (scale and evidence)
+
+- Multi-region field pilot, agronomist-labeled evaluation set
+- Satellite (Sentinel-2/SMAP) validation
+- A/B testing: Gemini vs GPT vs Claude; cost/quality
+- Feedback loop and model calibration
+- Mobile/offline scenario, i18n
+- Risk score API for insurance/finance partnerships
+
+---
+
+## 10. Production checklist
+
+- [ ] Real soil analysis and local expert verification
+- [ ] Forecast provider and frost alert
+- [ ] Authentication, rate limit, quota
+- [ ] KVKK/GDPR notice and data retention policy
+- [ ] AI provider agreement/data processing addenda
+- [ ] Cost alarm and token budget
+- [ ] Agronomist approval flow
+- [ ] Evaluation set and accuracy metrics
 - [ ] Docker/CI/CD, staging, HTTPS
-- [ ] Log/metric/trace ve hata izleme
-- [ ] Yedekleme ve felaket kurtarma
-- [ ] Yasal disclaimer ve kullanım koşulları
+- [ ] Log/metric/trace and error monitoring
+- [ ] Backup and disaster recovery
+- [ ] Legal disclaimer and terms of use
 
 ---
 
-## 11. Sonuç
+## 11. Conclusion
 
-Bu teslim, "çalışan bir backend"in ötesinde **dürüst bir mimari** kuruyor:
+This delivery goes beyond "a working backend" and builds an **honest architecture**:
 
-- NASA verisinin ne olduğunu ve ne olmadığını açıkça ayırıyor,
-- AI'ı tek karar mercii yapmıyor, açıklanabilir kural motoruna bağlıyor,
-- sağlayıcı bağımsız ve anahtarsız test edilebilir,
-- eksik veriyi gizlemiyor, `data_gaps` ve `warnings` ile gösteriyor,
-- 44 test ve canlı NASA doğrulamasıyla çalıştığını kanıtlıyor.
+- it clearly separates what NASA data is and is not,
+- it does not make AI the sole decision-maker, but ties it to an explainable rule engine,
+- it is provider-independent and testable without keys,
+- it does not hide missing data, but shows it with `data_gaps` and `warnings`,
+- it proves it works with 44 tests and live NASA validation.
 
-En büyük eksikler; **tarla ölçeğinde toprak verisi**, **hava tahmini**, **iklim projeksiyonu**, **yerel kalibrasyon**, **kullanıcı doğrulama/güvenlik** ve **agronomist değerlendirme seti**dir. Bunlar Bölüm 7-8'de önceliklendirildi.
+The biggest gaps are **field-scale soil data**, **weather forecasting**, **climate projection**, **local calibration**, **user verification/security**, and an **agronomist evaluation set**. These are prioritized in Sections 7-8.
 
-Kısaca: Bu backend, "NASA + AI ile ekin önerisi" fikrinin sağlam bir ilk sürümüdür; ancak gerçek çiftçi değeri için veri derinliği ve insan doğrulaması eklenmeden üretime alınmamalıdır.
+In short: this backend is a solid first version of the "crop recommendation with NASA + AI" idea; however, it should not go to production for real farmer value without adding data depth and human validation.
